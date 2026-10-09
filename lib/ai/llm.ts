@@ -224,6 +224,22 @@ type ChatResponse = {
 };
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504, 529]);
+/**
+ * Attentes avant chaque nouvelle tentative sur un statut RETRYABLE. Un modèle
+ * surchargé (Gemini : 503 « The model is overloaded ») le reste souvent plus de
+ * 2 s : une seule tentative à 2 s faisait échouer la génération.
+ */
+const RETRY_DELAYS_MS = [2_000, 5_000, 12_000];
+const MAX_RETRY_AFTER_MS = 30_000;
+
+/** Délai demandé par le serveur (en-tête Retry-After, en secondes ou en date HTTP), borné. */
+function retryAfterMs(res: Response): number | null {
+  const raw = res.headers.get("retry-after");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(raw) - Date.now();
+  return Number.isFinite(ms) && ms > 0 ? Math.min(ms, MAX_RETRY_AFTER_MS) : null;
+}
 
 type ChatChoice = NonNullable<ChatResponse["choices"]>[number];
 
@@ -308,8 +324,8 @@ async function callOpenAICompatible(
         clearTimeout(timer);
       }
       if (res.ok) return JSON.parse(text) as ChatResponse;
-      if (RETRYABLE.has(res.status) && attempt < 1) {
-        await sleep(2000);
+      if (RETRYABLE.has(res.status) && attempt < RETRY_DELAYS_MS.length) {
+        await sleep(retryAfterMs(res) ?? RETRY_DELAYS_MS[attempt]);
         continue;
       }
       let detail = text.slice(0, 400);

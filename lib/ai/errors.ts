@@ -115,6 +115,8 @@ export function translateAiError(e: unknown): TranslatedAiError | null {
       404: `Modèle introuvable chez ${label} — vérifiez le nom du modèle dans Profil › Génération IA (« Charger la liste »).${suffix}`,
       413: `Document ou offre trop volumineux pour ${label} — réduisez la taille du CV ou choisissez un modèle à plus grand contexte.`,
       429: `Limite atteinte chez ${label} (trop de requêtes ou quota épuisé) — patientez quelques minutes ou vérifiez votre crédit.`,
+      // JobScout a déjà réessayé plusieurs fois (lib/ai/llm.ts, RETRY_DELAYS_MS).
+      503: `${label} est surchargé (HTTP 503) et n'a pas répondu malgré plusieurs nouvelles tentatives — réessayez dans quelques minutes ; si cela se reproduit, choisissez un autre modèle de rédaction dans Profil › Génération IA.`,
     };
     return {
       message:

@@ -27,7 +27,7 @@ const REQ: StructuredRequest = {
 type Call = { url: string; init: RequestInit; body: Record<string, unknown> | null };
 
 /** Faux fetch : rejoue une liste de réponses et mémorise les requêtes. */
-function fakeFetch(responses: Array<{ status?: number; body: unknown } | Error>) {
+function fakeFetch(responses: Array<{ status?: number; body: unknown; headers?: Record<string, string> } | Error>) {
   const calls: Call[] = [];
   let i = 0;
   const fn = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -37,7 +37,7 @@ function fakeFetch(responses: Array<{ status?: number; body: unknown } | Error>)
     if (r instanceof Error) throw r;
     const status = r.status ?? 200;
     const text = typeof r.body === "string" ? r.body : JSON.stringify(r.body);
-    return new Response(text, { status, headers: { "content-type": "application/json" } });
+    return new Response(text, { status, headers: { "content-type": "application/json", ...r.headers } });
   }) as typeof fetch;
   return { fn, calls };
 }
@@ -225,17 +225,40 @@ describe("fournisseur compatible OpenAI", () => {
     expect(r.input).toBeNull();
   });
 
-  it("réessaie une fois sur 429 puis traduit l'erreur en français", async () => {
-    const { fn, calls } = fakeFetch([
-      { status: 429, body: { error: { message: "rate limited" } } },
-      { status: 429, body: { error: { message: "rate limited" } } },
-    ]);
+  it("réessaie trois fois sur 429 puis traduit l'erreur en français", async () => {
+    const { fn, calls } = fakeFetch([{ status: 429, body: { error: { message: "rate limited" } } }]);
     const err = await callStructured(REQ, cfgFor("openai"), { fetch: fn, ...noSleep }).catch((e) => e);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
     expect(err).toBeInstanceOf(LlmHttpError);
     const t = translateAiError(err)!;
     expect(t.status).toBe(429);
     expect(t.message).toContain("Limite atteinte chez OpenAI");
+  });
+
+  it("modèle surchargé (503 Gemini) : attend 2 s puis 5 s, et réussit au troisième essai", async () => {
+    const overloaded = { status: 503, body: { error: { message: "The model is overloaded. Please try again later." } } };
+    const { fn, calls } = fakeFetch([overloaded, overloaded, { body: toolAnswer({ title: "T", sections: { items: ["a"] } }) }]);
+    const waits: number[] = [];
+    const r = await callStructured(REQ, cfgFor("gemini"), { fetch: fn, sleep: async (ms: number) => void waits.push(ms) });
+    expect(calls).toHaveLength(3);
+    expect(waits).toEqual([2000, 5000]);
+    expect(r.input).toMatchObject({ title: "T" });
+  });
+
+  it("respecte Retry-After (borné à 30 s), et explique un 503 qui persiste", async () => {
+    const { fn, calls } = fakeFetch([
+      { status: 503, body: { error: { message: "overloaded" } }, headers: { "retry-after": "7" } },
+      { status: 503, body: { error: { message: "overloaded" } }, headers: { "retry-after": "120" } },
+      { status: 503, body: { error: { message: "overloaded" } } },
+    ]);
+    const waits: number[] = [];
+    const err = await callStructured(REQ, cfgFor("gemini"), { fetch: fn, sleep: async (ms: number) => void waits.push(ms) }).catch((e) => e);
+    expect(calls).toHaveLength(4);
+    expect(waits).toEqual([7000, 30000, 12000]);
+    const t = translateAiError(err)!;
+    expect(t.status).toBe(503);
+    expect(t.message).toContain("Google Gemini est surchargé");
+    expect(t.message).toContain("autre modèle de rédaction");
   });
 
   it("clé refusée (401) → message clair, sans nouvel essai", async () => {
