@@ -61,7 +61,8 @@ export function ActionsPanel({
   initialFolder?: string | null;
 }) {
   const [docs, setDocs] = useState<DocsState>(initial);
-  const [allLoading, setAllLoading] = useState(false);
+  // Génération en cours : dossier complet, CV seul ou lettre seule (une à la fois).
+  const [generating, setGenerating] = useState<null | "all" | "cv" | "lm">(null);
   const [msgLoading, setMsgLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msgPreview, setMsgPreview] = useState<{ text: string; length: number } | null>(null);
@@ -81,11 +82,12 @@ export function ActionsPanel({
   const applied = !!trackingStatus && trackingStatus !== "en_cours";
   const busy = applyLoading || trackLoading;
 
-  async function generateAll() {
-    setAllLoading(true);
+  /** « all » : CV + lettre ; « cv » ou « lm » : ce seul document (même forme de réponse). */
+  async function generate(kind: "all" | "cv" | "lm") {
+    setGenerating(kind);
     setError(null);
     try {
-      const res = await fetch("/api/generate/all", {
+      const res = await fetch(`/api/generate/${kind}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ offreId }),
@@ -108,16 +110,16 @@ export function ActionsPanel({
         return;
       }
       const data = await res.json().catch(() => null);
-      if (!data?.cv || !data?.lm) {
+      const wantCV = kind !== "lm";
+      const wantLM = kind !== "cv";
+      if ((wantCV && !data?.cv) || (wantLM && !data?.lm)) {
         setError("Réponse du serveur illisible — réessayez.");
         return;
       }
       setDocs((d) => ({
         ...d,
-        cv_pdf_id: data.cv.pdfId,
-        cv_docx_id: data.cv.docxId,
-        lm_pdf_id: data.lm.pdfId,
-        lm_docx_id: data.lm.docxId,
+        ...(wantCV ? { cv_pdf_id: data.cv.pdfId, cv_docx_id: data.cv.docxId } : {}),
+        ...(wantLM ? { lm_pdf_id: data.lm.pdfId, lm_docx_id: data.lm.docxId } : {}),
       }));
       if (data.folder) {
         setFolder(data.folder);
@@ -126,7 +128,7 @@ export function ActionsPanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur réseau");
     } finally {
-      setAllLoading(false);
+      setGenerating(null);
     }
   }
 
@@ -139,7 +141,7 @@ export function ActionsPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ offreId }),
       });
-      // res.ok AVANT res.json() — même motif que generateAll.
+      // res.ok AVANT res.json() — même motif que generate.
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         setError(data?.error || `Erreur serveur (HTTP ${res.status}).`);
@@ -253,19 +255,31 @@ export function ActionsPanel({
       {/* Un seul bouton principal à la fois : générer tant que le dossier est
           incomplet, puis postuler. */}
       <Button
-        onClick={generateAll}
+        onClick={() => generate("all")}
         size="lg"
         variant={docsReady ? "secondary" : "primary"}
         className="w-full"
-        disabled={allLoading}
+        disabled={!!generating}
       >
-        {allLoading ? <Spinner size={16} className="text-current" /> : <Sparkles className="h-4 w-4" />}
-        {allLoading
+        {generating === "all" ? <Spinner size={16} className="text-current" /> : <Sparkles className="h-4 w-4" />}
+        {generating === "all"
           ? "Génération en cours…"
           : docsReady
           ? "Régénérer les documents"
           : "Générer les documents"}
       </Button>
+
+      {/* Un seul document : moins cher et plus rapide quand l'autre convient déjà. */}
+      <div className="space-y-2">
+        <Button onClick={() => generate("lm")} variant="secondary" size="md" className="w-full" disabled={!!generating}>
+          {generating === "lm" ? <Spinner size={16} className="text-current" /> : <Mail className="h-4 w-4" />}
+          {generating === "lm" ? "Lettre en cours…" : hasLM ? "Régénérer la lettre de motivation" : "Générer la lettre de motivation"}
+        </Button>
+        <Button onClick={() => generate("cv")} variant="secondary" size="md" className="w-full" disabled={!!generating}>
+          {generating === "cv" ? <Spinner size={16} className="text-current" /> : <FileText className="h-4 w-4" />}
+          {generating === "cv" ? "CV en cours…" : hasCV ? "Régénérer le CV" : "Générer le CV"}
+        </Button>
+      </div>
 
       {/* Download row — primary DOCX, secondary PDF.
           Chaque ligne est conditionnée à SES PROPRES identifiants : en succès

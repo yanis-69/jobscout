@@ -5,7 +5,7 @@ import { generateCV } from "@/lib/ai/generate-cv";
 import { genericFailure, translateAiError } from "@/lib/ai/errors";
 import { fitCVToOnePage } from "@/lib/pdf/render";
 import { renderCVDocx } from "@/lib/docx/render";
-import { saveDocument } from "@/lib/db/documents";
+import { saveDocument, offreFolderPath } from "@/lib/db/documents";
 import { detectDocLanguage, sourceLanguageHint } from "@/lib/text/lang";
 
 export const runtime = "nodejs";
@@ -29,9 +29,16 @@ export async function POST(req: NextRequest) {
 
     const meta = { company: offre.company, title: offre.title };
     const pdfDoc = saveDocument({ type: "cv", offreId: offre.id, format: "pdf", buffer: pdf, meta });
-    saveDocument({ type: "cv", offreId: offre.id, format: "docx", buffer: docx, meta });
+    const docxDoc = saveDocument({ type: "cv", offreId: offre.id, format: "docx", buffer: docx, meta });
 
-    return NextResponse.json({ ok: true, document_id: pdfDoc.id, language: lang });
+    // Même forme que /api/generate/all (bouton « Générer le CV »).
+    return NextResponse.json({
+      ok: true,
+      document_id: pdfDoc.id,
+      cv: { pdfId: pdfDoc.id, docxId: docxDoc.id },
+      folder: offreFolderPath(offre.id, offre.company, offre.title),
+      language: lang,
+    });
   } catch (e) {
     const ai = translateAiError(e);
     if (ai) return NextResponse.json({ error: ai.message }, { status: ai.status });
