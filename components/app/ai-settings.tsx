@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { PROVIDERS, PROVIDER_IDS, noLocalModelMessage, type ProviderId } from "@/lib/ai/providers";
+import { GEMINI_PRICING_DATE, GEMINI_PRICING_URL, RATE_LIMITS_URL, dossierCost, formatUsd, knownPrice, type ModelInfo } from "@/lib/ai/model-catalog";
+import { ModelMeta, ModelPicker } from "@/components/app/model-picker";
 
 type Quota = {
   points_remaining: number | null;
@@ -58,7 +60,7 @@ export function AiSettings({
   const [baseURL, setBaseURL] = useState("");
   const [writer, setWriter] = useState("");
   const [reviewer, setReviewer] = useState("");
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState<null | "save" | "verify" | "models" | "reset">(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -122,7 +124,11 @@ export function AiSettings({
         return;
       }
       if (action === "models") {
-        const list = Array.isArray(data?.models) ? (data.models as string[]) : [];
+        const list = Array.isArray(data?.details)
+          ? (data.details as ModelInfo[])
+          : Array.isArray(data?.models)
+            ? (data.models as string[]).map((id) => ({ id, textCapable: true }))
+            : [];
         setModels(list);
         if (!list.length && preset.local) setError(noLocalModelMessage(provider, writer, reviewer));
         else setInfo(list.length ? `${list.length} modèle(s) disponible(s) chez ${preset.label}.` : `${preset.label} n'a renvoyé aucun modèle — saisissez son nom à la main.`);
@@ -135,7 +141,8 @@ export function AiSettings({
           return;
         }
         const list = Array.isArray(data?.models) ? (data.models as string[]) : [];
-        if (list.length) setModels(list);
+        // « Vérifier » ne renvoie que les noms : on garde les détails déjà chargés.
+        if (list.length) setModels((prev) => list.map((id) => prev.find((m) => m.id === id) ?? { id, textCapable: true }));
         const missing = Array.isArray(data?.missing) ? (data.missing as string[]) : [];
         if (missing.length) {
           setError(`Connexion à ${preset.label} réussie, mais modèle introuvable : ${missing.join(", ")} — choisissez-en un dans la liste.`);
@@ -174,7 +181,19 @@ export function AiSettings({
     if (status.mode === "pack") return "Pack actif";
     return `${PROVIDERS[status.provider]?.label ?? "Clé API"} actif`;
   }, [status]);
-  const listId = `ai-models-${provider}`;
+  /** Infos du modèle choisi : liste chargée, sinon tarif connu (Gemini) pour un nom saisi. */
+  const infoOf = (id: string): ModelInfo | undefined => {
+    const name = id.trim();
+    if (!name) return undefined;
+    const found = models.find((m) => m.id === name);
+    if (found) return found;
+    const price = knownPrice(provider, name);
+    return price.priceIn != null ? { id: name, textCapable: true, ...price } : undefined;
+  };
+  const writerInfo = infoOf(writer);
+  const reviewerInfo = infoOf(reviewer) ?? (reviewer.trim() ? undefined : writerInfo);
+  const pairCost = dossierCost(writerInfo, reviewerInfo);
+  const rateLimitsUrl = RATE_LIMITS_URL[provider];
 
   return (
     <Card data-testid="ai-settings">
@@ -296,18 +315,38 @@ export function AiSettings({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="text-caption text-textSecondary">Modèle de rédaction (CV, lettre)</span>
-              <Input className="mt-1" list={listId} value={writer} onChange={(e) => setWriter(e.target.value)} placeholder="nom du modèle" spellCheck={false} />
+              <ModelPicker value={writer} onChange={setWriter} models={models} placeholder="nom du modèle" />
+              {writerInfo && <ModelMeta model={writerInfo} />}
             </label>
             <label className="block">
               <span className="text-caption text-textSecondary">Modèle de relecture (plus léger)</span>
-              <Input className="mt-1" list={listId} value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="même modèle si vide" spellCheck={false} />
+              <ModelPicker value={reviewer} onChange={setReviewer} models={models} placeholder="même modèle si vide" />
+              {reviewer.trim() && reviewerInfo && <ModelMeta model={reviewerInfo} />}
             </label>
           </div>
-          <datalist id={listId}>
-            {models.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
+          {!preset.local && (pairCost != null || rateLimitsUrl) && (
+            <div className="rounded-md border border-border px-3 py-2.5 text-caption text-textSecondary space-y-1">
+              {pairCost != null && (
+                <p>
+                  <span className="font-semibold text-text">Coût estimé d'un dossier</span> (CV + lettre, relecture comprise) : ≈ {formatUsd(pairCost)}. Ordre de grandeur : les jetons réels de chaque appel sont dans le journal du serveur.
+                  {provider === "gemini" && (
+                    <>
+                      {" "}Prix : <a className="text-accent hover:underline" href={GEMINI_PRICING_URL} target="_blank" rel="noreferrer">tarif Google</a> du {GEMINI_PRICING_DATE}. Sur l'offre gratuite, rien n'est facturé dans la limite des quotas.
+                    </>
+                  )}
+                </p>
+              )}
+              {rateLimitsUrl && (
+                <p>
+                  <span className="font-semibold text-text">Requêtes par minute et par jour</span> : propres à votre compte et à son palier, {preset.label} ne les communique qu'ici :{" "}
+                  <a className="inline-flex items-center gap-0.5 text-accent hover:underline" href={rateLimitsUrl} target="_blank" rel="noreferrer">
+                    voir mes limites <ExternalLink className="h-3 w-3" />
+                  </a>
+                  . Un dossier fait 4 à 6 requêtes.
+                </p>
+              )}
+            </div>
+          )}
           {!preset.local && provider !== "anthropic" && (
             <p className="text-caption text-textSecondary">
               JobScout a été mis au point avec Claude. Avec un autre modèle, la qualité et le coût varient : relisez vos premiers documents.

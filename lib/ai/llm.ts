@@ -5,6 +5,7 @@ import { PROVIDERS, type ProviderId } from "./providers";
 import { isTimeoutError, networkCode, providerFetch } from "./http";
 import { coerceToSchema, extractJsonObject, parseToolArguments } from "./json-extract";
 import { AiContentError } from "./errors";
+import { geminiModelInfo, knownPrice, type ModelInfo } from "./model-catalog";
 
 /**
  * Couche commune des appels IA : une seule primitive, `callStructured`, qui
@@ -425,6 +426,92 @@ export async function listModels(cfg: LlmConfig, deps: LlmDeps = {}): Promise<st
     const page = await client.models.list({ limit: 100 });
     return page.data.map((m) => m.id);
   }
+  const body = await fetchModelsBody(cfg, deps);
+  const ids = [
+    ...(body?.data ?? []).map((m) => m.id),
+    ...(body?.models ?? []).map((m) => m.name),
+  ].filter((x): x is string => typeof x === "string");
+  // Gemini préfixe ses modèles par « models/ » : l'API compatible accepte les deux.
+  return [...new Set(ids.map((id) => id.replace(/^models\//, "")))].sort();
+}
+
+type ModelsBody = {
+  data?: Array<Record<string, unknown> & { id?: unknown }> | null;
+  models?: Array<Record<string, unknown> & { name?: unknown }> | null;
+};
+
+/**
+ * Liste des modèles avec, quand le fournisseur les donne, leurs jetons maximum
+ * et leurs prix (Profil › Génération IA). Gemini : API native, qui seule donne
+ * les jetons et le type de chaque modèle ; prix tirés du tarif public
+ * (lib/ai/model-catalog.ts). Ailleurs : champs de la liste compatible OpenAI
+ * (OpenRouter : prix et contexte ; Groq, Mistral : contexte).
+ */
+export async function listModelDetails(cfg: LlmConfig, deps: LlmDeps = {}): Promise<ModelInfo[]> {
+  if (cfg.provider === "gemini" && cfg.apiKey) {
+    const native = await geminiNativeModels(cfg, deps).catch(() => null);
+    if (native?.length) return native.sort((a, b) => a.id.localeCompare(b.id));
+  }
+  if (cfg.kind === "anthropic") {
+    return (await listModels(cfg, deps)).map((id) => ({ id, textCapable: true }));
+  }
+  const body = await fetchModelsBody(cfg, deps);
+  const byId = new Map<string, ModelInfo>();
+  for (const raw of [...(body?.data ?? []), ...(body?.models ?? [])]) {
+    const rawId = typeof raw.id === "string" ? raw.id : typeof raw.name === "string" ? raw.name : null;
+    if (!rawId) continue;
+    const id = rawId.replace(/^models\//, "");
+    const num = (v: unknown) => (typeof v === "number" && v > 0 ? v : typeof v === "string" && Number(v) > 0 ? Number(v) : undefined);
+    const top = (raw.top_provider ?? {}) as Record<string, unknown>;
+    const pricing = (raw.pricing ?? {}) as Record<string, unknown>;
+    // OpenRouter : prix en $ par jeton (chaîne) → $ par million.
+    const perM = (v: unknown) => {
+      if (v === "0" || v === 0) return 0;
+      const n = num(v);
+      return n == null ? undefined : Math.round(n * 1_000_000 * 10_000) / 10_000;
+    };
+    const priceIn = perM(pricing.prompt);
+    const priceOut = perM(pricing.completion);
+    byId.set(id, {
+      id,
+      label: typeof raw.name === "string" && raw.name !== rawId ? raw.name : undefined,
+      inputTokens: num(raw.context_length) ?? num(raw.context_window) ?? num(raw.max_context_length),
+      outputTokens: num(top.max_completion_tokens) ?? num(raw.max_completion_tokens),
+      priceIn,
+      priceOut,
+      freeTier: priceIn === 0 && priceOut === 0 ? true : undefined,
+      textCapable: true,
+      ...knownPrice(cfg.provider, id),
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** API native de Gemini (…/v1beta/models) : jetons maximum et méthodes de chaque modèle, page par page. */
+async function geminiNativeModels(cfg: LlmConfig, deps: LlmDeps): Promise<ModelInfo[]> {
+  const doFetch = deps.fetch ?? providerFetch;
+  const base = cfg.baseURL.replace(/\/+$/, "").replace(/\/openai$/, "");
+  const out: ModelInfo[] = [];
+  let pageToken = "";
+  for (let page = 0; page < 10; page++) {
+    const url = `${base}/models?pageSize=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+    const res = await doFetch(url, {
+      headers: { accept: "application/json", "x-goog-api-key": cfg.apiKey ?? "" },
+      signal: AbortSignal.timeout(LIST_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new LlmHttpError(res.status, cfg.provider, (await res.text()).slice(0, 300));
+    const body = (await res.json()) as { models?: Parameters<typeof geminiModelInfo>[0][]; nextPageToken?: string };
+    for (const m of body.models ?? []) {
+      const info = geminiModelInfo(m);
+      if (info) out.push(info);
+    }
+    pageToken = body.nextPageToken ?? "";
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+async function fetchModelsBody(cfg: LlmConfig, deps: LlmDeps): Promise<ModelsBody | null> {
   const doFetch = deps.fetch ?? providerFetch;
   const url = `${cfg.baseURL.replace(/\/+$/, "")}/models`;
   const controller = new AbortController();
@@ -443,7 +530,7 @@ export async function listModels(cfg: LlmConfig, deps: LlmDeps = {}): Promise<st
     clearTimeout(timer);
   }
   if (!res.ok) throw new LlmHttpError(res.status, cfg.provider, text.slice(0, 300));
-  let body: { data?: Array<{ id?: unknown }> | null; models?: Array<{ name?: unknown }> | null } | null = null;
+  let body: ModelsBody | null = null;
   try {
     body = JSON.parse(text);
   } catch {
@@ -456,10 +543,5 @@ export async function listModels(cfg: LlmConfig, deps: LlmDeps = {}): Promise<st
       `L'adresse ${cfg.baseURL} répond, mais pas comme ${PROVIDERS[cfg.provider].label} : un autre logiciel occupe sans doute cette adresse ou ce port. Vérifiez l'adresse du serveur dans Profil › Génération IA.`
     );
   }
-  const ids = [
-    ...(body?.data ?? []).map((m) => m.id),
-    ...(body?.models ?? []).map((m) => m.name),
-  ].filter((x): x is string => typeof x === "string");
-  // Gemini préfixe ses modèles par « models/ » : l'API compatible accepte les deux.
-  return [...new Set(ids.map((id) => id.replace(/^models\//, "")))].sort();
+  return body;
 }

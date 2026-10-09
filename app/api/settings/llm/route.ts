@@ -15,7 +15,7 @@ import {
   resetClaude,
   type LlmConfig,
 } from "@/lib/ai/client";
-import { listModels } from "@/lib/ai/llm";
+import { listModelDetails, listModels } from "@/lib/ai/llm";
 import { translateAiError } from "@/lib/ai/errors";
 import {
   PROVIDERS,
@@ -246,14 +246,22 @@ export async function POST(req: NextRequest) {
   const { cfg } = draft;
   const label = PROVIDERS[cfg.provider].label;
 
-  if (action === "models" || action === "verify") {
+  if (action === "models") {
+    try {
+      const details = await listModelDetails(cfg);
+      return NextResponse.json({ ok: true, models: details.map((m) => m.id), details });
+    } catch (e) {
+      return aiErrorResponse(e, `Vérification impossible auprès de ${label} — réessayez plus tard.`);
+    }
+  }
+
+  if (action === "verify") {
     let models: string[];
     try {
       models = await listModels(cfg);
     } catch (e) {
       return aiErrorResponse(e, `Vérification impossible auprès de ${label} — réessayez plus tard.`);
     }
-    if (action === "models") return NextResponse.json({ ok: true, models });
     // Serveur local joint mais sans modèle : avant la 3.4.14, « Vérifier » affichait
     // « Connexion réussie ✓ » et l'échec n'apparaissait qu'à l'import du CV.
     if (PROVIDERS[cfg.provider].local && models.length === 0) {
