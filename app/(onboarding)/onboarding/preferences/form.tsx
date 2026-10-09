@@ -11,6 +11,8 @@ import type { ProfileFull } from "@/lib/cv/types";
 import { COUNTRY_GROUPS, FRANCOPHONIE } from "@/lib/countries";
 import { SOURCES_META, DEFAULT_SOURCE_IDS } from "@/lib/sources-meta";
 import { EngineNotice } from "@/components/app/engine-notice";
+import { CityPicker } from "@/components/app/city-picker";
+import { DEFAULT_CITY_RADIUS_KM } from "@/lib/cities";
 const SOURCES = SOURCES_META;
 
 export function PreferencesForm() {
@@ -29,6 +31,8 @@ export function PreferencesForm() {
     const p: ProfileFull = JSON.parse(raw);
     if (!p.sources_enabled?.length) p.sources_enabled = [...DEFAULT_SOURCE_IDS];
     if (!p.preferred_contracts?.length) p.preferred_contracts = ["cdi", "cdd"];
+    p.target_cities ??= [];
+    p.city_radius_km ??= DEFAULT_CITY_RADIUS_KM;
     setProfile(p);
   }, [router]);
 
@@ -206,6 +210,14 @@ export function PreferencesForm() {
               </div>
             </div>
           ))}
+        </div>
+        <div className="mt-5 border-t border-border pt-4">
+          <CityPicker
+            countries={profile.target_countries}
+            cities={profile.target_cities}
+            radiusKm={profile.city_radius_km}
+            onChange={update}
+          />
         </div>
       </Card>
 

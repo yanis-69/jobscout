@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_CITY_RADIUS_KM, MAX_TARGET_CITIES } from "@/lib/cities";
 
 export const ExperienceSchema = z.object({
   id: z.number().optional(),
@@ -53,6 +54,12 @@ export const ProfileSchema = z.object({
   raw_cv_text: z.string().nullable().optional(),
   sectors: z.array(z.string()).default([]),
   target_countries: z.array(z.string()).default([]),
+  // Villes cibles (facultatif) : limitent le scan du pays correspondant à leurs alentours.
+  target_cities: z
+    .array(z.object({ city: z.string().trim().min(1).max(80), country: z.string().trim().min(1) }))
+    .max(MAX_TARGET_CITIES)
+    .default([]),
+  city_radius_km: z.number().int().min(0).max(100).default(DEFAULT_CITY_RADIUS_KM),
   sources_enabled: z.array(z.string()).default([]),
   preferred_contracts: z
     .array(z.enum(["cdi", "cdd", "vie", "stage", "alternance"]))

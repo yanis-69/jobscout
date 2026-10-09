@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     query: (params.get("q") ?? "").slice(0, 200),
     source: params.get("source") ?? "",
     country: params.get("country") ?? "",
+    city: (params.get("city") ?? "").slice(0, 100),
     contracts,
     minScore: parseMinScore(params.get("minScore")),
     // ?vie=1 (lien de l'accueil) : même règle que la puce contrat « V.I.E ».

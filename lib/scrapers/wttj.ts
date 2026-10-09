@@ -3,6 +3,8 @@ import type { Scraper, ScrapedOffre, ScrapeCriteria, ProgressEvent } from "./bas
 import { htmlToText } from "./base";
 import { detectVie } from "@/lib/vie";
 import { normalizeCountryName, nameToCode } from "@/lib/countries";
+import { locationMatchesCities } from "@/lib/cities";
+import type { ResolvedCity } from "@/lib/geo";
 
 /**
  * Welcome to the Jungle via son index de recherche public (Algolia) — le même
@@ -78,6 +80,10 @@ function block(title: string, body: unknown): string {
   return `<h2>${esc(title)}</h2>${inner}`;
 }
 
+function officeInCities(h: Hit, cities: ResolvedCity[]): boolean {
+  return (h.offices ?? []).some((o) => locationMatchesCities(o.city, cities));
+}
+
 function salaryLabel(h: Hit): string | null {
   const min = h.salary_minimum, max = h.salary_maximum;
   if (!min && !max) return null;
@@ -124,8 +130,18 @@ function toScraped(h: Hit): ScrapedOffre | null {
   };
 }
 
-async function searchPage(query: string, page: number): Promise<{ hits: Hit[]; nbPages: number }> {
+/** `around` : recherche limitée à un cercle autour d'une ville (rayon en km). */
+async function searchPage(
+  query: string,
+  page: number,
+  around?: { lat: number; lon: number; radiusKm: number }
+): Promise<{ hits: Hit[]; nbPages: number }> {
   const params = new URLSearchParams({ query, hitsPerPage: String(HITS_PER_PAGE), page: String(page) });
+  if (around) {
+    params.set("aroundLatLng", `${around.lat},${around.lon}`);
+    // « Ville seule » : petit cercle, puis filtre sur le nom de la ville.
+    params.set("aroundRadius", String(Math.max(around.radiusKm, 5) * 1000));
+  }
   const res = await fetch(ALGOLIA_URL, {
     method: "POST",
     headers: {
@@ -154,30 +170,63 @@ export const wttjScraper: Scraper = {
     );
     const queries = criteria.sectors.length ? criteria.sectors : [""];
 
-    // 1. Collecte via l'index : une recherche par secteur cible, 2 pages max.
+    // Villes cibles : leur pays n'est plus parcouru en entier mais autour d'elles.
+    const citiesByCode = new Map<string, ResolvedCity[]>();
+    for (const city of criteria.cities) {
+      const code = nameToCode(city.country);
+      if (code) citiesByCode.set(code, [...(citiesByCode.get(code) ?? []), city]);
+    }
+    const located = criteria.cities.filter((c) => c.lat != null && c.lon != null);
+    // Recherche générale utile s'il reste un pays sans ville, aucun pays, ou une
+    // ville non localisée (retrouvée alors par son nom dans le lieu de l'offre).
+    const needGeneral =
+      !targetCodes.size ||
+      [...targetCodes].some((c) => !citiesByCode.has(c)) ||
+      located.length < criteria.cities.length;
+
+    // 1. Collecte via l'index : une recherche par secteur (et par ville cible), 2 pages max.
     const seen = new Map<string, Hit>();
+    const nearCity = new Set<string>();
     let apiError: string | null = null;
-    for (const q of queries) {
-      for (let page = 0; page < PAGES_PER_QUERY; page++) {
-        try {
-          const { hits, nbPages } = await searchPage(q, page);
-          for (const h of hits) if (h?.objectID && !seen.has(h.objectID)) seen.set(h.objectID, h);
-          if (page + 1 >= nbPages) break;
-        } catch (e) {
-          apiError = e instanceof Error ? e.message : String(e);
-          break;
+    const searches: { around?: { lat: number; lon: number; radiusKm: number }; city?: ResolvedCity }[] = [
+      ...(needGeneral ? [{}] : []),
+      ...located.map((city) => ({ around: { lat: city.lat!, lon: city.lon!, radiusKm: criteria.radiusKm }, city })),
+    ];
+    for (const { around, city } of searches) {
+      for (const q of queries) {
+        for (let page = 0; page < PAGES_PER_QUERY; page++) {
+          try {
+            const { hits, nbPages } = await searchPage(q, page, around);
+            for (const h of hits) {
+              if (!h?.objectID) continue;
+              if (city && criteria.radiusKm === 0 && !officeInCities(h, [city])) continue;
+              if (!seen.has(h.objectID)) seen.set(h.objectID, h);
+              if (city) nearCity.add(h.objectID);
+            }
+            if (page + 1 >= nbPages) break;
+          } catch (e) {
+            apiError = e instanceof Error ? e.message : String(e);
+            break;
+          }
         }
+        if (apiError) break;
       }
       if (apiError) break;
     }
     if (apiError && seen.size === 0) throw new Error(apiError);
 
-    // 2. Filtre pays (si des pays cibles sont définis) + tri par date de publication.
+    // 2. Filtre pays/villes (si des pays cibles sont définis) + tri par date de publication.
     const filtered = Array.from(seen.values()).filter((h) => {
+      if (nearCity.has(h.objectID)) return true;
       if (!targetCodes.size) return true;
-      const codes = (h.offices ?? []).map((o) => (o.country_code ?? "").toUpperCase()).filter(Boolean);
-      if (!codes.length) return true; // lieu inconnu : on laisse le scoring décider
-      return codes.some((c) => targetCodes.has(c));
+      const offices = (h.offices ?? []).filter((o) => o.country_code);
+      if (!offices.length) return true; // lieu inconnu : on laisse le scoring décider
+      return offices.some((o) => {
+        const code = (o.country_code ?? "").toUpperCase();
+        if (!targetCodes.has(code)) return false;
+        const cities = citiesByCode.get(code);
+        return !cities || locationMatchesCities(o.city, cities);
+      });
     });
     filtered.sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
     const picked = filtered.slice(0, max);

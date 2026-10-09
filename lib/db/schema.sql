@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS profile (
   raw_cv_text TEXT,
   sectors TEXT NOT NULL DEFAULT '[]',
   target_countries TEXT NOT NULL DEFAULT '[]',
+  target_cities TEXT NOT NULL DEFAULT '[]',
+  city_radius_km INTEGER NOT NULL DEFAULT 20,
   sources_enabled TEXT NOT NULL DEFAULT '[]',
   preferred_contracts TEXT NOT NULL DEFAULT '["cdi","cdd"]',
   extraction_confidence INTEGER DEFAULT 0,

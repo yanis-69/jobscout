@@ -16,6 +16,8 @@ export const profile = {
   raw_cv_text: null,
   sectors: ["digital"],
   target_countries: ["France"],
+  target_cities: [],
+  city_radius_km: 20,
   sources_enabled: [],
   preferred_contracts: ["cdi"],
   extraction_confidence: 90,

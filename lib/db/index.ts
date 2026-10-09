@@ -20,11 +20,15 @@ export function getDb(): DatabaseSync {
   db.exec(schema);
 
   // Migrations additives (bases existantes) — no-op si la colonne existe déjà.
-  try {
-    db.exec(
-      `ALTER TABLE profile ADD COLUMN preferred_contracts TEXT NOT NULL DEFAULT '["cdi","cdd"]'`
-    );
-  } catch {}
+  for (const column of [
+    `preferred_contracts TEXT NOT NULL DEFAULT '["cdi","cdd"]'`,
+    `target_cities TEXT NOT NULL DEFAULT '[]'`,
+    `city_radius_km INTEGER NOT NULL DEFAULT 20`,
+  ]) {
+    try {
+      db.exec(`ALTER TABLE profile ADD COLUMN ${column}`);
+    } catch {}
+  }
 
   _db = db;
   return db;

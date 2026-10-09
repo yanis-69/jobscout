@@ -1,13 +1,15 @@
 import "server-only";
 import { getDb, parseJson, asJson, transaction } from "./index";
+import { DEFAULT_CITY_RADIUS_KM, keepCitiesOfCountries } from "@/lib/cities";
 import type { ProfileFull, Profile, Experience, Education, Skill, Language } from "@/lib/cv/types";
 
 export function getProfile(): ProfileFull | null {
   const db = getDb();
   const profile = db.prepare("SELECT * FROM profile ORDER BY id ASC LIMIT 1").get() as
-    | (Omit<Profile, "sectors" | "target_countries" | "sources_enabled" | "preferred_contracts"> & {
+    | (Omit<Profile, "sectors" | "target_countries" | "target_cities" | "sources_enabled" | "preferred_contracts"> & {
         sectors: string;
         target_countries: string;
+        target_cities: string;
         sources_enabled: string;
         preferred_contracts: string;
       })
@@ -42,6 +44,8 @@ export function getProfile(): ProfileFull | null {
     ...profile,
     sectors: parseJson(profile.sectors, []),
     target_countries: parseJson(profile.target_countries, []),
+    target_cities: parseJson(profile.target_cities, []),
+    city_radius_km: profile.city_radius_km ?? DEFAULT_CITY_RADIUS_KM,
     sources_enabled: parseJson(profile.sources_enabled, []),
     preferred_contracts: parseJson(profile.preferred_contracts, ["cdi", "cdd"]),
     experiences: experiences.map((e) => ({
@@ -64,8 +68,8 @@ export function saveProfile(input: Omit<ProfileFull, "id" | "created_at" | "upda
     db.prepare("DELETE FROM profile").run();
     const result = db
       .prepare(
-        `INSERT INTO profile (full_name, email, phone, location, linkedin_url, portfolio_url, summary, raw_cv_text, sectors, target_countries, sources_enabled, preferred_contracts, extraction_confidence)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO profile (full_name, email, phone, location, linkedin_url, portfolio_url, summary, raw_cv_text, sectors, target_countries, target_cities, city_radius_km, sources_enabled, preferred_contracts, extraction_confidence)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.full_name ?? null,
@@ -78,6 +82,8 @@ export function saveProfile(input: Omit<ProfileFull, "id" | "created_at" | "upda
         input.raw_cv_text ?? null,
         asJson(input.sectors ?? []),
         asJson(input.target_countries ?? []),
+        asJson(keepCitiesOfCountries(input.target_cities ?? [], input.target_countries ?? [])),
+        input.city_radius_km ?? DEFAULT_CITY_RADIUS_KM,
         asJson(input.sources_enabled ?? []),
         asJson(input.preferred_contracts ?? ["cdi", "cdd"]),
         input.extraction_confidence ?? 0

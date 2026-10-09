@@ -3,8 +3,16 @@ import type { Scraper, ScrapedOffre, ScrapeCriteria, ProgressEvent } from "./bas
 import { htmlToText, newContext } from "./base";
 import { detectVie } from "@/lib/vie";
 import { normalizeCountryName, strictCountryName } from "@/lib/countries";
+import { citiesForCountry } from "@/lib/cities";
 
 const SOURCE = "linkedin";
+
+/** Rayon LinkedIn, en miles, parmi les valeurs de son filtre « Distance » (la plus proche). */
+function linkedinDistance(km: number): string {
+  const miles = km * 0.621;
+  const allowed = [0, 5, 10, 25, 50, 75, 100];
+  return String(allowed.reduce((best, v) => (Math.abs(v - miles) < Math.abs(best - miles) ? v : best)));
+}
 
 type ListingCard = {
   jobId: string;
@@ -27,18 +35,27 @@ export const linkedinScraper: Scraper = {
       const seen = new Set<string>();
       const cards: ListingCard[] = [];
 
-      const countries = criteria.countries.length ? criteria.countries : [""];
-      // 2 pages max par combinaison secteur×pays : avec une liste de pays large
+      // Lieux interrogés : le pays entier, ou ses villes cibles (« Lyon, France »)
+      // avec le rayon du profil.
+      const locations: { location: string; distance: string }[] = (
+        criteria.countries.length ? criteria.countries : [""]
+      ).flatMap((country) => {
+        const cities = country ? citiesForCountry(criteria.cities, country) : [];
+        return cities.length
+          ? cities.map((c) => ({ location: `${c.label}, ${country}`, distance: linkedinDistance(criteria.radiusKm) }))
+          : [{ location: country, distance: "" }];
+      });
+      // 2 pages max par combinaison secteur×lieu : avec une liste de pays large
       // (ex. francophonie), on couvre chaque pays au lieu d'épuiser le budget
       // sur la première combinaison.
       for (const sector of criteria.sectors.length ? criteria.sectors : [""]) {
-        for (const country of countries) {
+        for (const { location, distance } of locations) {
           if (cards.length >= max) break;
           let start = 0;
           for (let p = 0; p < 2 && cards.length < max; p++) {
             const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(
               sector
-            )}&location=${encodeURIComponent(country)}&start=${start}`;
+            )}&location=${encodeURIComponent(location)}${distance ? `&distance=${distance}` : ""}&start=${start}`;
             let pageCards: ListingCard[] = [];
             try {
               await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });

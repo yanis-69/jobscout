@@ -87,6 +87,33 @@ describe("searchOffres", () => {
     expect(offresCounts().vie).toBe(1);
   });
 
+  it("filtre « Ville » : toutes les graphies d'une ville, rattachées à leur pays", () => {
+    const lyon = [
+      add({ location: "Lyon 2e Arrondissement" }),
+      add({ location: "LYON 03" }),
+      add({ location: "69 - LYON" }),
+      add({ location: "Lyon, Auvergne-Rhône-Alpes, France" }),
+    ];
+    const decines = [add({ location: "DECINES CHARPIEU" }), add({ location: "Décines-Charpieu" })];
+    add({ location: "Villeurbanne" });
+    add({ location: "69" });
+    add({ location: null });
+    const geneve = add({ location: "Genève", country: "Suisse" });
+
+    const result = searchOffres({ city: "lyon" });
+    expect(result.offers.map((o) => o.id).sort()).toEqual([...lyon].sort());
+    expect(searchOffres({ city: "decines charpieu" }).offers.map((o) => o.id).sort()).toEqual([...decines].sort());
+    expect(searchOffres({ city: "geneve", country: "France" }).total).toBe(0);
+    expect(searchOffres({ city: "geneve", country: "Suisse" }).offers.map((o) => o.id)).toEqual([geneve]);
+
+    expect(result.facets.cities).toEqual([
+      { key: "decines charpieu", label: "Décines-Charpieu", country: "France", count: 2 },
+      { key: "geneve", label: "Genève", country: "Suisse", count: 1 },
+      { key: "lyon", label: "Lyon", country: "France", count: 4 },
+      { key: "villeurbanne", label: "Villeurbanne", country: "France", count: 1 },
+    ]);
+  });
+
   it("tri « Plus anciennes » : dates croissantes, dates inconnues en dernier", () => {
     const sansDate = add({ posted_at: null });
     const recente = add({ posted_at: "2026-03-01" });

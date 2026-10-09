@@ -1,6 +1,7 @@
 import "server-only";
 import type { ExtractedCV } from "./types";
 import type { ProfileFull } from "./types";
+import { DEFAULT_CITY_RADIUS_KM } from "@/lib/cities";
 
 /**
  * Convertit la sortie Claude → ProfileFull, en :
@@ -102,6 +103,8 @@ export function buildProfileFromExtraction(
     raw_cv_text: rawCvText,
     sectors: [],
     target_countries: [],
+    target_cities: [],
+    city_radius_km: DEFAULT_CITY_RADIUS_KM,
     sources_enabled: [],
     // Même défaut que le schéma zod, la colonne SQL et l'écran de préférences.
     preferred_contracts: ["cdi", "cdd"],

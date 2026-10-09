@@ -3,6 +3,7 @@ import { getDb, asJson, parseJson } from "./index";
 import type { ScrapedOffre } from "@/lib/scrapers/base";
 import type { ScoreResult } from "@/lib/ai/score-offre";
 import { classifyContract, CONTRACT_ORDER, type ContractCategory } from "@/lib/contracts";
+import { cityFromLocation, displayCityLabel, preferCityLabel } from "@/lib/cities";
 
 export type { ScrapedOffre };
 
@@ -56,6 +57,9 @@ export type OffreSummary = Pick<
 
 export type OffersSort = "smart" | "newest" | "oldest" | "score";
 
+/** Ville du filtre « Ville » : une entrée par ville et par pays, toutes graphies confondues. */
+export type CityFacet = { key: string; label: string; country: string | null; count: number };
+
 export type OffersSearch = {
   offers: OffreSummary[];
   total: number;
@@ -63,6 +67,7 @@ export type OffersSearch = {
   facets: {
     total: number;
     countries: string[];
+    cities: CityFacet[];
     sources: string[];
     contractCounts: Record<ContractCategory, number>;
     hasVie: boolean;
@@ -97,6 +102,8 @@ type CachedOffre = Omit<OffreSummary, "description_text" | "score_reason"> & {
   excerpt: string;
   /** JSON brut, lu seulement pour les offres de la page renvoyée. */
   score_breakdown: string | null;
+  /** Clé de ville (cityFromLocation), null si le lieu n'en désigne pas une. */
+  city_key: string | null;
 };
 
 type OffresCache = {
@@ -151,6 +158,7 @@ function buildOffresCache(fingerprint: string): OffresCache {
   const contractCounts = Object.fromEntries(CONTRACT_ORDER.map((contract) => [contract, 0])) as Record<ContractCategory, number>;
   const countries = new Set<string>();
   const sources = new Set<string>();
+  const cities = new Map<string, CityFacet>();
   const byId = new Map<number, CachedOffre>();
   const smart: CachedOffre[] = [];
   for (const row of rows) {
@@ -158,6 +166,17 @@ function buildOffresCache(fingerprint: string): OffresCache {
     contractCounts[contract_category]++;
     if (row.country) countries.add(row.country);
     sources.add(row.source);
+    const city = cityFromLocation(row.location);
+    if (city) {
+      const facetKey = `${row.country ?? ""}|${city.key}`;
+      const facet = cities.get(facetKey);
+      if (facet) {
+        facet.count++;
+        facet.label = preferCityLabel(facet.label, city.label);
+      } else {
+        cities.set(facetKey, { key: city.key, label: city.label, country: row.country, count: 1 });
+      }
+    }
     const offer: CachedOffre = {
       id: row.id, source: row.source, url: row.url, title: row.title,
       company: row.company, country: row.country, location: row.location,
@@ -167,6 +186,7 @@ function buildOffresCache(fingerprint: string): OffresCache {
       // substr() compte des caractères, slice() des unités UTF-16 (émojis) : on
       // recoupe pour rendre exactement l’extrait d’avant.
       excerpt: (row.excerpt ?? "").slice(0, 1000), score_breakdown: row.score_breakdown,
+      city_key: city?.key ?? null,
     };
     byId.set(offer.id, offer);
     smart.push(offer);
@@ -176,6 +196,9 @@ function buildOffresCache(fingerprint: string): OffresCache {
     facets: {
       total: rows.length,
       countries: [...countries].sort((a, b) => a.localeCompare(b, "fr")),
+      cities: [...cities.values()]
+        .map((c) => ({ ...c, label: displayCityLabel(c.label) }))
+        .sort((a, b) => a.label.localeCompare(b.label, "fr")),
       sources: [...sources].sort(),
       contractCounts,
       hasVie: contractCounts.vie > 0,
@@ -226,6 +249,8 @@ export function searchOffres(opts: {
   query?: string;
   source?: string;
   country?: string;
+  /** Clé de ville (CityFacet.key) : toutes les graphies d'une même ville. */
+  city?: string;
   contracts?: ContractCategory[];
   /** Score minimal (true = 60, seuil de la puce « Score 60+ »). */
   minScore?: boolean | number;
@@ -243,6 +268,7 @@ export function searchOffres(opts: {
     if (haystacks && !(haystacks.get(row.id) ?? "").includes(query)) return false;
     if (opts.source && row.source !== opts.source) return false;
     if (opts.country && row.country !== opts.country) return false;
+    if (opts.city && row.city_key !== opts.city) return false;
     if (contracts.size && !contracts.has(row.contract_category)) return false;
     if (minScore > 0 && (row.score ?? 0) < minScore) return false;
     if (opts.vieOnly && row.contract_category !== "vie") return false;

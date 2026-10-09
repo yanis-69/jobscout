@@ -5,7 +5,9 @@ import { upsertOffreFromSource, setOffreScore } from "@/lib/db/offres";
 import { scoreOffresLocal } from "@/lib/scoring/local";
 import { getProfile } from "@/lib/db/queries";
 import { getDb } from "@/lib/db";
-import type { ProgressEvent } from "@/lib/scrapers/base";
+import type { ProgressEvent, ScrapeCriteria } from "@/lib/scrapers/base";
+import { DEFAULT_CITY_RADIUS_KM, keepCitiesOfCountries, radiusLabel } from "@/lib/cities";
+import { resolveCities } from "@/lib/geo";
 
 export type OrchestratorEvent =
   | ProgressEvent
@@ -57,6 +59,30 @@ export async function* runScan(
 
   let totalInserted = 0;
 
+  // Villes cibles : seules celles d'un pays encore ciblé comptent. Géocodées une
+  // fois pour toutes les sources (code INSEE, coordonnées).
+  const targetCities = keepCitiesOfCountries(profile.target_cities ?? [], profile.target_countries);
+  const cities = await resolveCities(targetCities);
+  const radiusKm = profile.city_radius_km ?? DEFAULT_CITY_RADIUS_KM;
+  if (cities.length) {
+    const lines = [
+      `Villes ciblées (${radiusLabel(radiusKm)}) : ${cities.map((c) => `${c.label} (${c.country})`).join(", ")}.`,
+      ...cities
+        .filter((c) => c.lat == null)
+        .map((c) => `${c.city} : ville non localisée, recherche par son nom uniquement.`),
+    ];
+    for (const line of lines) {
+      log.push(line);
+      onLog(line);
+    }
+  }
+  const criteria: ScrapeCriteria = {
+    sectors: profile.sectors,
+    countries: profile.target_countries,
+    cities,
+    radiusKm,
+  };
+
   for (const scraper of scrapers) {
     let seen = 0;
     let okCount = 0;
@@ -65,7 +91,6 @@ export async function* runScan(
     const pendingScoring: OrchestratorEvent[] = [];
 
     try {
-      const criteria = { sectors: profile.sectors, countries: profile.target_countries };
       const progressQueue: ProgressEvent[] = [];
       const onEvent = (e: ProgressEvent) => progressQueue.push(e);
 

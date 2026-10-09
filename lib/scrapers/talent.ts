@@ -3,6 +3,7 @@ import type { Scraper, ScrapedOffre, ScrapeCriteria, ProgressEvent } from "./bas
 import { htmlToText } from "./base";
 import { detectVie } from "@/lib/vie";
 import { nameToCode } from "@/lib/countries";
+import { citiesForCountry } from "@/lib/cities";
 import {
   parseDocument,
   firstMatchHtml,
@@ -119,8 +120,9 @@ function parseSearchPage(html: string, domain: Domain): Card[] {
   return out;
 }
 
-async function fetchSearchPage(domain: Domain, keywords: string, page: number): Promise<Card[]> {
-  const params = new URLSearchParams({ k: keywords, l: "" });
+/** `place` : ville cible (libellé), vide pour tout le pays du domaine. */
+async function fetchSearchPage(domain: Domain, keywords: string, page: number, place: string): Promise<Card[]> {
+  const params = new URLSearchParams({ k: keywords, l: place });
   if (page > 1) params.set("p", String(page));
   const res = await fetch(`https://${domain.host}/jobs?${params}`, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`Talent.com ${domain.host} HTTP ${res.status}`);
@@ -201,24 +203,31 @@ export const talentScraper: Scraper = {
 
     for (const domain of activeDomains) {
       let domainCount = 0;
-      for (const q of queries) {
-        for (let page = 1; page <= 2 && domainCount < perDomain; page++) {
-          try {
-            const cards = await fetchSearchPage(domain, q, page);
-            if (!cards.length) break;
-            for (const c of cards) {
-              if (!seen.has(c.id) && domainCount < perDomain) {
-                seen.set(c.id, c);
-                domainCount++;
+      // Villes cibles de ce pays : une recherche par ville, budget du pays partagé.
+      const cities = citiesForCountry(criteria.cities, domain.country);
+      const places = cities.length ? cities.map((c) => c.label) : [""];
+      const perPlace = Math.max(5, Math.ceil(perDomain / places.length));
+      for (const place of places) {
+        const target = Math.min(perDomain, domainCount + perPlace);
+        for (const q of queries) {
+          for (let page = 1; page <= 2 && domainCount < target; page++) {
+            try {
+              const cards = await fetchSearchPage(domain, q, page, place);
+              if (!cards.length) break;
+              for (const c of cards) {
+                if (!seen.has(c.id) && domainCount < target) {
+                  seen.set(c.id, c);
+                  domainCount++;
+                }
               }
+              if (cards.length < 10) break;
+              await sleep(1000);
+            } catch {
+              break;
             }
-            if (cards.length < 10) break;
-            await sleep(1000);
-          } catch {
-            break;
           }
+          if (domainCount >= target) break;
         }
-        if (domainCount >= perDomain) break;
       }
     }
 

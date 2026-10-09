@@ -5,6 +5,7 @@ import {
   isEngineInstalled,
   ENGINE_MISSING_MESSAGE,
 } from "./browser-engine";
+import type { ResolvedCity } from "@/lib/geo";
 
 export type ScrapedOffre = {
   source_id: string;
@@ -27,6 +28,10 @@ export type ScrapedOffre = {
 export type ScrapeCriteria = {
   sectors: string[];
   countries: string[];
+  /** Villes cibles géocodées : un pays qui en a n'est parcouru qu'autour d'elles. */
+  cities: ResolvedCity[];
+  /** Rayon autour des villes (km) ; 0 = la ville seule. */
+  radiusKm: number;
   maxOffres?: number;
 };
 

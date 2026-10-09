@@ -7,6 +7,8 @@ import { apecScraper } from "./apec";
 import { helloworkScraper } from "./hellowork";
 import { francetravailScraper } from "./francetravail";
 import { talentScraper } from "./talent";
+import { meteojobScraper } from "./meteojob";
+import { adeccoScraper } from "./adecco";
 
 export const scrapers: Record<string, Scraper> = {
   wttj: wttjScraper,
@@ -16,6 +18,8 @@ export const scrapers: Record<string, Scraper> = {
   hellowork: helloworkScraper,
   francetravail: francetravailScraper,
   talent: talentScraper,
+  meteojob: meteojobScraper,
+  adecco: adeccoScraper,
 };
 
 export const VALID_SOURCES = Object.keys(scrapers);

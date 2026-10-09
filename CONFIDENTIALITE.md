@@ -40,7 +40,7 @@ En version source, `npm run build` (nécessaire avant `npm run start`) recopie d
 
 ### 3.2 Quoi
 
-- **Votre profil :** nom, e-mail, téléphone, ville, adresses LinkedIn et portfolio, résumé, expériences, formations, compétences, langues, secteurs et pays visés, sources et types de contrat choisis.
+- **Votre profil :** nom, e-mail, téléphone, ville, adresses LinkedIn et portfolio, résumé, expériences, formations, compétences, langues, secteurs, pays et villes visés (avec le rayon autour des villes), sources et types de contrat choisis.
 - **Le texte de votre CV.** JobScout garde le texte extrait, pas le fichier d'origine (PDF, Word, image…). Le fichier est lu, puis il n'est ni copié ni conservé. Chaque CV ajouté complète ce texte.
 - **Les profils enregistrés :** les copies complètes de profil que vous sauvegardez dans « Profils enregistrés ».
 - **Les offres collectées :** titre, entreprise, lieu, contrat, salaire, description, données brutes renvoyées par le site, score. Une offre peut contenir le nom ou les coordonnées d'un recruteur (voir la section 7).
@@ -97,6 +97,7 @@ Les sources suspendues (APEC, Civiweb) ne sont jamais interrogées, même si ell
 
 - vos secteurs, utilisés comme mots-clés de recherche ;
 - le pays visé, selon le site ;
+- les villes visées, si vous en avez indiqué : leur nom, ou leurs coordonnées et le rayon choisi, selon le site. Pour Adecco, la liste des communes comprises dans ce rayon ;
 - votre adresse IP ;
 - des en-têtes techniques. Le plus souvent, JobScout se présente comme un navigateur Chrome ordinaire sous Windows, en français. Les exceptions : l'index de Welcome to the Jungle et l'API de France Travail, pour lesquels JobScout n'imite pas de navigateur.
 
@@ -107,10 +108,14 @@ Les sources suspendues (APEC, Civiweb) ne sont jamais interrogées, même si ell
 | Welcome to the Jungle | `csekhvms53-dsn.algolia.net` : l'index de recherche du site, hébergé chez Algolia | non : à activer vous-même |
 | HelloWork | Si vous visez la France ou aucun pays précis : `www.hellowork.com` | non : à activer vous-même |
 | France Travail | Si vous visez la France ou aucun pays précis : `candidat.francetravail.fr`, ou l'API officielle si vous avez fourni des identifiants (voir 4.3) | oui |
+| Meteojob | Si vous visez la France ou aucun pays précis : `www.meteojob.com` | non : à activer vous-même |
+| Adecco | Si vous visez la France ou aucun pays précis : `www.adecco.com` | non : à activer vous-même |
 | Talent.com | Le site de chaque pays visé : `fr.talent.com`, `be.talent.com`, `ch.talent.com`, `lu.talent.com`, `ca.talent.com`, `www.talent.com` (États-Unis), `ma.talent.com`, `tn.talent.com` ou `sn.talent.com`. `fr.talent.com` si vous n'indiquez aucun pays. Aucun site Talent.com n'est contacté si aucun de vos pays n'est dans cette liste | non : à activer vous-même |
 | LinkedIn | `www.linkedin.com`, pages publiques, sans compte | non : à cocher vous-même, puis le moteur doit être installé |
 | APEC | aucun : source suspendue depuis la 3.4.13, le site bloquant les requêtes automatiques | non : suspendue |
 | Civiweb (V.I.E) | aucun : source suspendue, Business France exigeant désormais une authentification | non : suspendue |
+
+**Villes visées.** Si vous avez indiqué des villes, JobScout les localise au début du scan : celles de France auprès de `geo.api.gouv.fr` (service public de l'État), celles des autres pays auprès de `nominatim.openstreetmap.org` (OpenStreetMap). Seuls le nom de la ville et son pays sont envoyés. Si Adecco est cochée et que le rayon n'est pas « Ville seule », JobScout télécharge aussi une fois la liste publique des communes françaises (`geo.api.gouv.fr`), sans rien envoyer de plus.
 
 Une méthode mérite d'être connue : pour **Welcome to the Jungle**, si vous l'activez, JobScout interroge directement l'index de recherche du site. Il utilise la clé de recherche que le site emploie dans ses propres pages et indique `welcometothejungle.com` comme origine.
 

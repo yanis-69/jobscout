@@ -2,6 +2,8 @@ import "server-only";
 import type { Scraper, ScrapedOffre, ScrapeCriteria, ProgressEvent } from "./base";
 import { htmlToText } from "./base";
 import { detectVie } from "@/lib/vie";
+import { citiesForCountry, locationMatchesCities } from "@/lib/cities";
+import type { ResolvedCity } from "@/lib/geo";
 import {
   parseDocument,
   firstMatchHtml,
@@ -114,13 +116,20 @@ function apiJobToScraped(job: FtApiJob): ScrapedOffre | null {
   };
 }
 
-async function fetchApi(keywords: string, start: number, size: number): Promise<FtApiJob[]> {
+/** Ville cible (null = toute la France) et rayon de recherche autour d'elle. */
+type Place = { city: ResolvedCity; radiusKm: number } | null;
+
+async function fetchApi(keywords: string, start: number, size: number, place: Place): Promise<FtApiJob[]> {
   const token = await getToken();
   if (!token) return [];
   const params = new URLSearchParams({
     motsCles: keywords,
     range: `${start}-${start + size - 1}`,
   });
+  if (place?.city.insee) {
+    params.set("commune", place.city.insee);
+    params.set("distance", String(place.radiusKm));
+  }
   const res = await fetch(`${API_BASE}/offres/search?${params}`, {
     headers: { accept: "application/json", authorization: `Bearer ${token}` },
   });
@@ -176,12 +185,16 @@ function parseHtmlSearch(html: string): HtmlCard[] {
   return out;
 }
 
-async function fetchHtmlPage(keywords: string, page: number): Promise<HtmlCard[]> {
+async function fetchHtmlPage(keywords: string, page: number, place: Place): Promise<HtmlCard[]> {
   const params = new URLSearchParams({
     motsCles: keywords,
     offresPartenaires: "true",
     page: String(page),
   });
+  if (place?.city.insee) {
+    params.set("lieux", place.city.insee);
+    params.set("rayon", String(place.radiusKm));
+  }
   const res = await fetch(`${SEARCH_PAGE}?${params}`, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`France Travail HTTP ${res.status}`);
   return parseHtmlSearch(await res.text());
@@ -242,23 +255,34 @@ export const francetravailScraper: Scraper = {
 
     const max = criteria.maxOffres ?? 50;
     const queries = criteria.sectors.length ? criteria.sectors : [""];
+    // Villes cibles en France : une recherche par ville (code INSEE + rayon),
+    // budget partagé entre elles. Ville non localisée : recherche nationale
+    // filtrée sur le lieu de l'offre.
+    const cities = citiesForCountry(criteria.cities, "France");
+    const places: Place[] = cities.length ? cities.map((city) => ({ city, radiusKm: criteria.radiusKm })) : [null];
+    const perPlace = Math.max(10, Math.ceil(max / places.length));
+    const inPlace = (place: Place, location: string | null) =>
+      !place || !!place.city.insee || locationMatchesCities(location, [place.city]);
 
     // Stratégie 1 : API officielle (descriptions complètes, aucun fetch détail nécessaire)
     const apiOffres = new Map<string, ScrapedOffre>();
-    for (const q of queries) {
-      let start = 0;
-      while (apiOffres.size < max && start < 150) {
-        const jobs = await fetchApi(q, start, 50);
-        if (!jobs.length) break;
-        for (const j of jobs) {
-          const o = apiJobToScraped(j);
-          if (o && !apiOffres.has(o.source_id)) apiOffres.set(o.source_id, o);
+    for (const place of places) {
+      const target = Math.min(max, apiOffres.size + perPlace);
+      for (const q of queries) {
+        let start = 0;
+        while (apiOffres.size < target && start < 150) {
+          const jobs = await fetchApi(q, start, 50, place);
+          if (!jobs.length) break;
+          for (const j of jobs) {
+            const o = apiJobToScraped(j);
+            if (o && !apiOffres.has(o.source_id) && inPlace(place, o.location)) apiOffres.set(o.source_id, o);
+          }
+          if (jobs.length < 50) break;
+          start += 50;
+          await sleep(400);
         }
-        if (jobs.length < 50) break;
-        start += 50;
-        await sleep(400);
+        if (apiOffres.size >= target) break;
       }
-      if (apiOffres.size >= max) break;
     }
 
     if (apiOffres.size > 0) {
@@ -276,19 +300,22 @@ export const francetravailScraper: Scraper = {
 
     // Stratégie 2 : HTML fallback
     const seen = new Map<string, HtmlCard>();
-    for (const q of queries) {
-      for (let page = 1; page <= 3 && seen.size < max; page++) {
-        try {
-          const cards = await fetchHtmlPage(q, page);
-          if (!cards.length) break;
-          for (const c of cards) if (!seen.has(c.id)) seen.set(c.id, c);
-          if (cards.length < 10) break;
-          await sleep(1200);
-        } catch {
-          break;
+    for (const place of places) {
+      const target = Math.min(max, seen.size + perPlace);
+      for (const q of queries) {
+        for (let page = 1; page <= 3 && seen.size < target; page++) {
+          try {
+            const cards = await fetchHtmlPage(q, page, place);
+            if (!cards.length) break;
+            for (const c of cards) if (!seen.has(c.id) && inPlace(place, c.city)) seen.set(c.id, c);
+            if (cards.length < 10) break;
+            await sleep(1200);
+          } catch {
+            break;
+          }
         }
+        if (seen.size >= target) break;
       }
-      if (seen.size >= max) break;
     }
 
     const cards = Array.from(seen.values()).slice(0, max);

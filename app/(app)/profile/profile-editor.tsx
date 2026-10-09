@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { COUNTRY_GROUPS } from "@/lib/countries";
 import { SOURCES_META } from "@/lib/sources-meta";
 import { EngineNotice } from "@/components/app/engine-notice";
+import { CityPicker } from "@/components/app/city-picker";
 import type { ProfileFull, Experience, Education, Skill, Language } from "@/lib/cv/types";
 
 const SOURCES = SOURCES_META;
@@ -359,6 +360,16 @@ function SearchCard({
           ))}
         </div>
       )}
+
+      <div className="mb-4">
+        <CityPicker
+          compact
+          countries={profile.target_countries}
+          cities={profile.target_cities}
+          radiusKm={profile.city_radius_km}
+          onChange={update}
+        />
+      </div>
 
       <p className="text-caption uppercase text-textSecondary mb-2">Contrats recherchés</p>
       <div className="flex flex-wrap gap-1.5 mb-4">

@@ -2,6 +2,7 @@ import "server-only";
 import type { Scraper, ScrapedOffre, ScrapeCriteria, ProgressEvent } from "./base";
 import { htmlToText } from "./base";
 import { detectVie } from "@/lib/vie";
+import { citiesForCountry } from "@/lib/cities";
 import {
   parseDocument,
   firstMatchHtml,
@@ -87,8 +88,9 @@ function parseSearchPage(html: string): Card[] {
   return cards;
 }
 
-async function fetchSearchPage(keywords: string, page: number): Promise<Card[]> {
-  const params = new URLSearchParams({ k: keywords, l: "France" });
+/** `place` : ville cible (libellé), sinon toute la France. */
+async function fetchSearchPage(keywords: string, page: number, place: string): Promise<Card[]> {
+  const params = new URLSearchParams({ k: keywords, l: place });
   if (page > 1) params.set("p", String(page));
   const res = await fetch(`${SEARCH_URL}?${params}`, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new Error(`HelloWork HTTP ${res.status}`);
@@ -161,20 +163,27 @@ export const helloworkScraper: Scraper = {
     const max = criteria.maxOffres ?? 50;
     const queries = criteria.sectors.length ? criteria.sectors : [""];
     const seen = new Map<string, Card>();
+    // Villes cibles en France : une recherche par ville, budget partagé.
+    const cities = citiesForCountry(criteria.cities, "France");
+    const places = cities.length ? cities.map((c) => c.label) : ["France"];
+    const perPlace = Math.max(10, Math.ceil(max / places.length));
 
-    for (const q of queries) {
-      for (let page = 1; page <= 3 && seen.size < max; page++) {
-        try {
-          const cards = await fetchSearchPage(q, page);
-          if (!cards.length) break;
-          for (const c of cards) if (!seen.has(c.id)) seen.set(c.id, c);
-          if (cards.length < 10) break;
-          await sleep(1200);
-        } catch {
-          break;
+    for (const place of places) {
+      const target = Math.min(max, seen.size + perPlace);
+      for (const q of queries) {
+        for (let page = 1; page <= 3 && seen.size < target; page++) {
+          try {
+            const cards = await fetchSearchPage(q, page, place);
+            if (!cards.length) break;
+            for (const c of cards) if (!seen.has(c.id)) seen.set(c.id, c);
+            if (cards.length < 10) break;
+            await sleep(1200);
+          } catch {
+            break;
+          }
         }
+        if (seen.size >= target) break;
       }
-      if (seen.size >= max) break;
     }
 
     const cards = Array.from(seen.values()).slice(0, max);

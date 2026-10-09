@@ -7,7 +7,7 @@ import { ArrowRight, ArrowUpRight, Briefcase, CalendarDays, ChevronDown, MapPin,
 import { Chip } from "@/components/ui/chip";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatRelativeDate, scoreColor } from "@/lib/utils";
-import type { OffreSummary, OffersSearch, OffersSort } from "@/lib/db/offres";
+import type { CityFacet, OffreSummary, OffersSearch, OffersSort } from "@/lib/db/offres";
 import { CONTRACT_LABELS, CONTRACT_ORDER, type ContractCategory } from "@/lib/contracts";
 import { SOURCES_META } from "@/lib/sources-meta";
 
@@ -44,6 +44,7 @@ export function OffresList({
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("");
   const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
   // ?vie=1 (carte de l'accueil) coche simplement la puce contrat « V.I.E » : une seule
   // règle (contract_category), un seul filtre à retirer.
   const [contracts, setContracts] = useState<Set<ContractCategory>>(() => new Set(initialVieOnly ? ["vie"] : []));
@@ -62,9 +63,12 @@ export function OffresList({
   const initialVieRef = useRef(initialVieOnly);
   const contractKey = [...contracts].sort().join(",");
   const vieFilter = contracts.has("vie");
-  const hasFilters = !!query || !!source || !!country || contracts.size > 0 || minScore;
-  const activeFilterCount = Number(!!source) + Number(!!country) + contracts.size + Number(minScore);
+  const hasFilters = !!query || !!source || !!country || !!city || contracts.size > 0 || minScore;
+  const activeFilterCount = Number(!!source) + Number(!!country) + Number(!!city) + contracts.size + Number(minScore);
   const { countries, sources, contractCounts } = result.facets;
+  // Villes du pays choisi (toutes sinon) ; une même ville présente dans deux pays
+  // n'apparaît qu'une fois, avec le total de ses offres.
+  const cityOptions = cityChoices(result.facets.cities ?? [], country);
   const shown = result.offers;
   const remaining = Math.max(0, result.total - shown.length);
   const selected = shown.find((offer) => offer.id === selectedId) ?? shown[0] ?? null;
@@ -113,6 +117,7 @@ export function OffresList({
     if (query) params.set("q", query);
     if (source) params.set("source", source);
     if (country) params.set("country", country);
+    if (city) params.set("city", city);
     if (contractKey) params.set("contracts", contractKey);
     if (minScore) params.set("minScore", String(scoreThreshold));
     setLoading(true);
@@ -135,10 +140,10 @@ export function OffresList({
       }
     }, page > 1 ? 0 : query ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [query, source, country, contractKey, minScore, scoreThreshold, sortBy, page, refreshKey]);
+  }, [query, source, country, city, contractKey, minScore, scoreThreshold, sortBy, page, refreshKey]);
 
   function reset() {
-    setQuery(""); setSource(""); setCountry(""); setContracts(new Set()); setMinScore(false); setSelectedId(null); setFiltersExpanded(false); setPage(1);
+    setQuery(""); setSource(""); setCountry(""); setCity(""); setContracts(new Set()); setMinScore(false); setSelectedId(null); setFiltersExpanded(false); setPage(1);
   }
 
   function toggleContract(contract: ContractCategory) {
@@ -191,10 +196,22 @@ export function OffresList({
             <option value="">Toutes les sources</option>
             {sources.map((item) => <option key={item} value={item}>{sourceLabels[item] ?? item}</option>)}
           </select>
-          <select value={country} onChange={(event) => { setCountry(event.target.value); setPage(1); }} aria-label="Filtrer par pays" className="h-9 max-w-full rounded-md border border-border bg-bg px-3 text-small text-text focus:border-accent focus:outline-none">
+          <select value={country} onChange={(event) => {
+            const next = event.target.value;
+            setCountry(next);
+            // La ville choisie n'existe pas dans le nouveau pays : on la retire.
+            if (city && !cityChoices(result.facets.cities ?? [], next).some((item) => item.key === city)) setCity("");
+            setPage(1);
+          }} aria-label="Filtrer par pays" className="h-9 max-w-full rounded-md border border-border bg-bg px-3 text-small text-text focus:border-accent focus:outline-none">
             <option value="">Tous les pays</option>
             {countries.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
+          {(cityOptions.length > 0 || city) && (
+            <select value={city} onChange={(event) => { setCity(event.target.value); setPage(1); }} aria-label="Filtrer par ville" className="h-9 max-w-full rounded-md border border-border bg-bg px-3 text-small text-text focus:border-accent focus:outline-none">
+              <option value="">Toutes les villes</option>
+              {cityOptions.map((item) => <option key={item.key} value={item.key}>{item.label} ({numberFormat.format(item.count)})</option>)}
+            </select>
+          )}
           {hasFilters && <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 px-2 text-small font-semibold text-accent hover:underline"><RotateCcw className="h-3.5 w-3.5" /> Effacer les filtres</button>}
         </div>
         </div>
@@ -236,6 +253,17 @@ export function OffresList({
       )}
     </div>
   );
+}
+
+function cityChoices(cities: CityFacet[], country: string): { key: string; label: string; count: number }[] {
+  const merged = new Map<string, { key: string; label: string; count: number }>();
+  for (const item of cities) {
+    if (country && item.country !== country) continue;
+    const known = merged.get(item.key);
+    if (known) known.count += item.count;
+    else merged.set(item.key, { key: item.key, label: item.label, count: item.count });
+  }
+  return [...merged.values()];
 }
 
 function OfferRow({ offer, selected, onSelect }: { offer: OffreSummary; selected: boolean; onSelect: () => void }) {
