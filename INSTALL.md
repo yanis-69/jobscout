@@ -111,6 +111,7 @@ Attendez la ligne `✓ Ready in …` (une vingtaine de secondes la première foi
 
 - Le message `ExperimentalWarning: SQLite is an experimental feature` est normal.
 - La toute première ouverture d'une page prend quelques secondes (elle se prépare), les suivantes sont instantanées.
+- JobScout s'ouvre sur l'écran **« Qui utilise JobScout ? »** : tapez votre prénom (ou un nom de votre choix), puis **Entrer**. Chaque nom a son propre espace (profil, CV, offres, candidatures, documents, clés d'IA). Pas de mot de passe pour l'instant. Pour passer à un autre espace : **Changer d'utilisateur**, en bas de la barre latérale. Si vous utilisiez déjà JobScout, le premier nom créé retrouve vos données.
 - JobScout n'est accessible que depuis votre ordinateur (adresse `127.0.0.1`), jamais depuis le réseau.
 
 **Raccourci Windows** : `scripts\Start-JobScout.ps1` lance le serveur et ouvre le navigateur en une fois :

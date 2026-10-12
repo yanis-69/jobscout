@@ -17,7 +17,11 @@ export function OnboardingFrame({ current, title, description, children, wide = 
             <span className="brand-mark h-9 w-9 rounded-[13px]"><Search className="h-5 w-5" strokeWidth={1.75} /></span>
             <span className="font-display text-[23px] font-semibold">JobScout<span className="text-accent">.</span></span>
           </Link>
-          <span className="text-small text-textSecondary">Configuration du profil</span>
+          <span className="flex items-center gap-4 text-small text-textSecondary">
+            <span className="hidden sm:inline">Configuration du profil</span>
+            {/* La page de connexion remplace la session par celle choisie. */}
+            <Link href="/login" className="font-semibold text-accent hover:underline">Changer d'utilisateur</Link>
+          </span>
         </div>
       </header>
       {/* Espacements resserrés : à 1440×900, la zone de dépôt du CV (étape 1)

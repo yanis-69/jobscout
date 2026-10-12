@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { runScan } from "@/lib/scan/orchestrator";
 import { VALID_SOURCES } from "@/lib/scrapers/registry";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const onlySource = searchParams.get("source")?.toLowerCase() ?? null;
   const restrictedSource =
@@ -80,3 +81,6 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);

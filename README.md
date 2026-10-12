@@ -2,7 +2,7 @@
 
 Trouvez des offres d'emploi grâce à un scan multi-plateformes, triez-les avec un score calculé sur votre vrai profil, et générez pour chacune un CV et une lettre de motivation d'une page (compatibles ATS), sans jamais inventer une compétence que vous n'avez pas.
 
-Tout tourne sur votre machine : base SQLite locale, serveur limité à `127.0.0.1`, aucun compte à créer. Seuls sortent les recherches envoyées aux sites d'offres pendant un scan et, si vous utilisez une IA en ligne, les textes transmis au fournisseur que vous avez choisi, plus quelques requêtes techniques ([détail](CONFIDENTIALITE.md)).
+Tout tourne sur votre machine : base SQLite locale, serveur limité à `127.0.0.1`, aucun compte en ligne à créer. Un simple nom d'utilisateur, sans mot de passe pour l'instant, donne à chaque personne son propre espace sur l'ordinateur : profil et CV, offres, candidatures, documents et clés d'IA. Seuls sortent les recherches envoyées aux sites d'offres pendant un scan et, si vous utilisez une IA en ligne, les textes transmis au fournisseur que vous avez choisi, plus quelques requêtes techniques ([détail](CONFIDENTIALITE.md)).
 
 > Site et guide de démarrage : **https://latenightsbeats1208-pixel.github.io/jobscout/** · [Installation](INSTALL.md) · [Installation sur Mac](INSTALL-MAC.md) · [Guide de l'IA](GUIDE-IA.md) · [Conditions d'utilisation](CGU.md) · [Confidentialité](CONFIDENTIALITE.md)
 >
@@ -102,7 +102,7 @@ Cascade selon le type de fichier : PDF (`pdf-parse` ou `pdfjs-dist` multi-colonn
 
 ## Génération de documents
 
-`data/documents/…` — CV et lettre en PDF **et** DOCX, avec une boucle de rétrécissement qui garantit une page A4. Langue détectée par offre (français, ou anglais si l'annonce est en anglais). Relecture automatique : orthographe, affirmations non étayées par le profil. Message court (V.I.E) réservé aux offres V.I.E.
+`data/users/<nom>/documents/…` — CV et lettre en PDF **et** DOCX, avec une boucle de rétrécissement qui garantit une page A4. Langue détectée par offre (français, ou anglais si l'annonce est en anglais). Relecture automatique : orthographe, affirmations non étayées par le profil. Message court (V.I.E) réservé aux offres V.I.E.
 
 Coût : avec Claude (Anthropic), environ 0,12 à 0,20 $ par dossier (CV + lettre, relecture comprise) aux tarifs actuels, selon la longueur du profil et de l'offre. Avec un autre fournisseur, le coût suit ses tarifs ; en local (Ollama, LM Studio), il est nul. Le nombre de jetons de chaque appel est écrit dans le journal du serveur (`[llm] …`).
 

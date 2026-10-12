@@ -9,6 +9,7 @@ import { renderCVDocx, renderLMDocx } from "@/lib/docx/render";
 import { saveDocument, offreFolderPath } from "@/lib/db/documents";
 import { detectDocLanguage, sourceLanguageHint } from "@/lib/text/lang";
 import { countryNameEnglish } from "@/lib/countries";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -17,7 +18,7 @@ export const maxDuration = 180;
  * Generate CV + LM together in parallel.
  * Returns the document IDs for both PDF and DOCX of each.
  */
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const { offreId } = await req.json();
     const profile = getProfile();
@@ -132,3 +133,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { getSetting, setSetting } from "@/lib/db";
 import { documentsDir, resolveUserFolderInput, writableRoots } from "@/lib/paths";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ function isAllowedPath(target: string): boolean {
   });
 }
 
-export async function GET() {
+async function handleGET() {
   const stored = getSetting(SETTING_KEY);
   return NextResponse.json({
     folder: stored ?? defaultPath(),
@@ -33,7 +34,7 @@ export async function GET() {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const action = body.action ?? "save";
   const rawFolder: string | undefined = body.folder;
@@ -96,3 +97,7 @@ export async function POST(req: NextRequest) {
   setSetting(SETTING_KEY, folder);
   return NextResponse.json({ ok: true, folder, isCustom: true });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);
+export const POST = withUser(handlePOST);

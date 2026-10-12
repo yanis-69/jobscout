@@ -206,6 +206,7 @@ Attendez la ligne `✓ Ready in …`, puis ouvrez **http://127.0.0.1:3000** dans
 - **Pour arrêter JobScout** : cliquez dans la fenêtre du Terminal, puis **control + C (⌃C)**. Pas ⌘C, qui copie sans rien arrêter. Si vous fermez la fenêtre à la place, le Terminal demande en général de confirmer l'arrêt du programme en cours : confirmer arrête JobScout.
 - Un message `ExperimentalWarning: SQLite is an experimental feature` peut s'afficher : c'est normal.
 - La toute première ouverture d'une page prend quelques secondes (elle se prépare), les suivantes sont instantanées.
+- JobScout s'ouvre sur l'écran **« Qui utilise JobScout ? »** : tapez votre prénom (ou un nom de votre choix), puis **Entrer**. Chaque nom a son propre espace (profil, CV, offres, candidatures, documents, clés d'IA). Pas de mot de passe pour l'instant. Pour passer à un autre espace : **Changer d'utilisateur**, en bas de la barre latérale. Si vous utilisiez déjà JobScout, le premier nom créé retrouve vos données.
 - JobScout n'est accessible que depuis votre Mac (adresse `127.0.0.1`), jamais depuis le réseau. Si macOS demande d'autoriser « node » à accepter des connexions entrantes, vous pouvez refuser : JobScout n'en a pas besoin.
 
 Pour ne plus taper ces commandes chaque jour, créez le [lanceur Mac](#le-lanceur-mac) une fois l'installation terminée.
@@ -225,7 +226,7 @@ Comptez 5 à 10 minutes (durée relevée sous Windows). Tout se passe dans le na
 3. **Vérifier** : relisez le profil extrait et corrigez ce qui doit l'être. JobScout ne rédigera jamais une compétence absente de ce profil : c'est le moment d'être complet.
 4. **Préférences** : pays visés, types de contrat, secteurs, et les sources à scanner.
 
-**Dossier des documents** : les CV et lettres générés vont par défaut dans `/Users/marie/jobscout/data/documents` (la vidéo, tournée sous Windows, affiche un chemin en `C:\`). Le plus simple est de garder ce dossier. Pour en choisir un autre, dans **Profil › Dossier des documents**, tapez son chemin complet, qui commence par `/Users/…` ou par `~/` (par exemple `~/JobScout-documents`), puis cliquez sur **Enregistrer**. Le bouton **Vérifier** teste le dossier sans l'enregistrer. Le bouton « Parcourir… » n'apparaît que dans Chrome et Edge : dans Safari et Firefox, il est absent, c'est normal. Un dossier dans Documents ou sur le Bureau fonctionne aussi, mais macOS peut demander si le Terminal y a accès (acceptez), et si iCloud synchronise ces dossiers, vos CV y seront copiés.
+**Dossier des documents** : les CV et lettres générés vont par défaut dans `/Users/marie/jobscout/data/users/<votre nom d'utilisateur>/documents` (la vidéo, tournée sous Windows, affiche un chemin en `C:\`). Le plus simple est de garder ce dossier. Pour en choisir un autre, dans **Profil › Dossier des documents**, tapez son chemin complet, qui commence par `/Users/…` ou par `~/` (par exemple `~/JobScout-documents`), puis cliquez sur **Enregistrer**. Le bouton **Vérifier** teste le dossier sans l'enregistrer. Le bouton « Parcourir… » n'apparaît que dans Chrome et Edge : dans Safari et Firefox, il est absent, c'est normal. Un dossier dans Documents ou sur le Bureau fonctionne aussi, mais macOS peut demander si le Terminal y a accès (acceptez), et si iCloud synchronise ces dossiers, vos CV y seront copiés.
 
 **LinkedIn (facultatif)** : c'est la seule source qui a besoin d'un petit navigateur intégré, et il demande **macOS 12 ou plus récent**. Pour l'activer : cochez **LinkedIn** dans **Profil › Recherche › Sources** : un encadré « Moteur LinkedIn requis » apparaît sous les sources, avec le bouton **Installer le moteur LinkedIn**. Environ 100 Mo à télécharger (96,5 Mo pour une puce Apple, 101,3 Mo pour un Mac Intel), environ 210 Mo sur le disque (206 Mo mesurés sur puce Apple, 208 Mo sur Intel) ; comptez 6 s sur puce Apple et 10 s sur Intel sur les Mac de test de GitHub (connexion de centre de données, mesuré le 08/10/2026) ; chez vous, 1 à 2 minutes (mesuré sous Windows). Le moteur se range dans `jobscout/data/browsers`.
 
@@ -374,7 +375,7 @@ Les trois tutoriels ont été **tournés sous Windows**. Tout ce qui se passe da
 - ignorez la petite note PowerShell « npm.cmd » du début (vers 0:05 à 0:11) ;
 - la clé se colle avec ⌘V ;
 - [IA locale, à 0:39](https://youtu.be/gOMQkcsD6LA?t=39) : sur Mac, Ollama demande macOS 14, et LM Studio une puce Apple ;
-- [page Profil, à 1:35](https://youtu.be/gOMQkcsD6LA?t=95) : le chemin affiché est un chemin Windows ; sur Mac, ce sera `/Users/<votre nom>/jobscout/data/documents`.
+- [page Profil, à 1:35](https://youtu.be/gOMQkcsD6LA?t=95) : le chemin affiché est un chemin Windows ; sur Mac, ce sera `/Users/<votre nom>/jobscout/data/users/<votre nom d'utilisateur>/documents`.
 
 **[3. Utilisation](https://youtu.be/45uLxsWXXLQ?t=10)** : valable à partir de 0:10, jusqu'à la fin.
 

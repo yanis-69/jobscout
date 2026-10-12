@@ -4,6 +4,7 @@ import { listDocuments, type DocumentRow } from "@/lib/db/documents";
 import { getDb } from "@/lib/db";
 import { PageHeader } from "@/components/app/page-header";
 import path from "node:path";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ function displayDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default async function DocumentsPage() {
+async function DocumentsPageContent() {
   const docs = listDocuments();
   const ids = [...new Set(docs.map((doc) => doc.offre_id).filter((id): id is number => id != null))];
   const offerRows = ids.length ? getDb().prepare(`SELECT id, title, company FROM offres WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as { id: number; title: string; company: string }[] : [];
@@ -99,4 +100,9 @@ function DossierCard({ dossier }: { dossier: Dossier }) {
       </div>
     </article>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function DocumentsPage() {
+  return userScope(() => DocumentsPageContent());
 }

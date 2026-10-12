@@ -31,10 +31,14 @@ Elle décrit, au mieux de la connaissance de l'éditeur, le code de JobScout 3.4
 
 | Vous utilisez | Dossier de données |
 |---|---|
-| Le code source (clone Git ou ZIP), lancé avec `npm run dev`, `npm run start`, `scripts/Start-JobScout.ps1` ou le lanceur Mac `JobScout.command` (`npm run shortcut:mac`) | `data/` dans le dossier du projet, sauf si vous avez défini un autre emplacement (variables `JOBSCOUT_DATA_DIR`, `JOBSCOUT_DB_PATH` ou `JOBSCOUT_DOCS_PATH`, par exemple dans `.env`) |
+| Le code source (clone Git ou ZIP), lancé avec `npm run dev`, `npm run start`, `scripts/Start-JobScout.ps1` ou le lanceur Mac `JobScout.command` (`npm run shortcut:mac`) | `data/` dans le dossier du projet, sauf si vous avez défini un autre emplacement (variable `JOBSCOUT_DATA_DIR`, par exemple dans `.env`) |
 | L'installeur Windows, si vous l'avez construit vous-même (`npm run package`) | `%LOCALAPPDATA%\JobScout`. Le menu « Dossier de données » de l'icône JobScout, près de l'horloge, l'ouvre directement |
 
-La base de données est le fichier `jobscout.db`, accompagné de `jobscout.db-wal` et `jobscout.db-shm`.
+Chaque utilisateur a son propre dossier, `users/<nom>/`, dans le dossier de données. Il contient sa base de données, le fichier `jobscout.db` (accompagné de `jobscout.db-wal` et `jobscout.db-shm`), et le sous-dossier `documents`. Le fichier `accounts.json` liste les noms d'utilisateur, avec leurs dates de création et de dernière connexion.
+
+**Pas de mot de passe pour l'instant.** Le nom d'utilisateur sépare les données de chaque personne, mais ne les protège pas : toute personne qui peut ouvrir JobScout sur cet ordinateur peut choisir n'importe quel nom dans la liste et voir son espace, clés d'IA comprises. Le nom choisi est retenu par un cookie de votre navigateur, `jobscout_user`, qui ne quitte pas votre ordinateur.
+
+**Données d'avant les comptes.** Si vous utilisiez JobScout avant cette version, votre base unique `jobscout.db` est recopiée dans le dossier du premier utilisateur créé. L'original reste en place, en sauvegarde : vous pouvez le supprimer une fois vos données retrouvées. Les documents déjà générés restent dans l'ancien dossier `documents` et restent téléchargeables depuis JobScout.
 
 En version source, `npm run build` (nécessaire avant `npm run start`) recopie dans `.next/standalone/` le contenu de `data/` et le fichier `.env`, tels qu'ils sont au moment de la compilation. Cette copie peut donc contenir votre base, vos clés API comprises, et vos documents.
 

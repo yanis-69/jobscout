@@ -3,6 +3,7 @@ import { getDocument, buildDocFilename } from "@/lib/db/documents";
 import { getOffre } from "@/lib/db/offres";
 import { getProfile } from "@/lib/db/queries";
 import fs from "node:fs";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ function buildContentDisposition(filename: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function handleGET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const doc = getDocument(Number(id));
   if (!doc) return NextResponse.json({ error: "Document introuvable" }, { status: 404 });
@@ -46,3 +47,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);

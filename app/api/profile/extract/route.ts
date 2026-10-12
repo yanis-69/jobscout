@@ -4,11 +4,12 @@ import { extractCV } from "@/lib/cv/extract-semantic";
 import { buildProfileFromExtraction } from "@/lib/cv/validate";
 import { getLlmConfig, LlmNotConfiguredError } from "@/lib/ai/client";
 import { genericFailure, translateAiError } from "@/lib/ai/errors";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     // Refus AVANT toute lecture de fichier : l'extraction de texte (PDF scanné
     // -> OCR) peut prendre des dizaines de secondes pour un refus prévisible.
@@ -45,3 +46,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: genericFailure("profile/extract", err) }, { status: 500 });
   }
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

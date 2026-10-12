@@ -1,10 +1,11 @@
 import { listCandidatures, candidaturesCounts } from "@/lib/db/candidatures";
 import { PageHeader } from "@/components/app/page-header";
 import { CandidaturesTable } from "./table";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function CandidaturesPage() {
+async function CandidaturesPageContent() {
   const items = listCandidatures();
   const { upcoming } = candidaturesCounts();
   const inProgress = items.filter((item) => item.status === "en_cours").length;
@@ -18,4 +19,9 @@ export default async function CandidaturesPage() {
       <CandidaturesTable initial={items} />
     </>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function CandidaturesPage() {
+  return userScope(() => CandidaturesPageContent());
 }

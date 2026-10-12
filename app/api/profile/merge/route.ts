@@ -8,11 +8,12 @@ import { setSetting } from "@/lib/db";
 import { ProfileFullSchema } from "@/lib/cv/types";
 import { getLlmConfig, LlmNotConfiguredError } from "@/lib/ai/client";
 import { genericFailure, translateAiError } from "@/lib/ai/errors";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     return await handleMerge(req);
   } catch (e) {
@@ -129,3 +130,6 @@ async function handleMerge(req: NextRequest) {
     },
   });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

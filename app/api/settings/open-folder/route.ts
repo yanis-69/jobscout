@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { getSetting } from "@/lib/db";
 import { documentsDir } from "@/lib/paths";
 import fs from "node:fs";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
  * Opens the documents folder in the user's OS file explorer.
  * Only meaningful when running locally (npm run dev).
  */
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   // Sécurité : on n'ouvre QUE le dossier documents configuré, jamais un chemin
   // arbitraire fourni par le client (body.path est ignoré).
@@ -41,3 +42,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

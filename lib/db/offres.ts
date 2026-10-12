@@ -1,5 +1,6 @@
 import "server-only";
 import { getDb, asJson, parseJson } from "./index";
+import { dbPath } from "@/lib/paths";
 import type { ScrapedOffre } from "@/lib/scrapers/base";
 import type { ScoreResult } from "@/lib/ai/score-offre";
 import { classifyContract, CONTRACT_ORDER, type ContractCategory } from "@/lib/contracts";
@@ -118,7 +119,7 @@ type OffresCache = {
 };
 
 const ORDER_TTL_MS = 60_000;
-let offresCache: OffresCache | null = null;
+const offresCaches = new Map<string, OffresCache>();
 
 /**
  * Empreinte de la base, lue à chaque appel (deux lectures de quelques microsecondes) :
@@ -208,16 +209,20 @@ function buildOffresCache(fingerprint: string): OffresCache {
 
 function getOffresCache(): OffresCache {
   const fingerprint = dbFingerprint();
-  if (!offresCache || offresCache.fingerprint !== fingerprint) {
-    offresCache = buildOffresCache(fingerprint);
-  } else if (Date.now() - offresCache.orderedAt > ORDER_TTL_MS) {
+  // Un cache par base : chaque utilisateur a la sienne (lib/session-context.ts).
+  const key = dbPath();
+  let cache = offresCaches.get(key);
+  if (!cache || cache.fingerprint !== fingerprint) {
+    cache = buildOffresCache(fingerprint);
+    offresCaches.set(key, cache);
+  } else if (Date.now() - cache.orderedAt > ORDER_TTL_MS) {
     // Seul l’ordre bouge avec l’heure : on relit les identifiants triés, pas les lignes.
-    const cache = offresCache;
+    const current = cache;
     const ids = getDb().prepare(`SELECT o.id FROM offres o ORDER BY ${SMART_ORDER}`).all() as { id: number }[];
-    cache.smart = ids.map(({ id }) => cache.byId.get(id)).filter((offer): offer is CachedOffre => !!offer);
-    cache.orderedAt = Date.now();
+    current.smart = ids.map(({ id }) => current.byId.get(id)).filter((offer): offer is CachedOffre => !!offer);
+    current.orderedAt = Date.now();
   }
-  return offresCache;
+  return cache;
 }
 
 function getHaystacks(cache: OffresCache): Map<number, string> {

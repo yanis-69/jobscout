@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/client";
 import { listModelDetails, listModels } from "@/lib/ai/llm";
 import { translateAiError } from "@/lib/ai/errors";
+import { withUser } from "@/lib/session";
 import {
   PROVIDERS,
   PROVIDER_IDS,
@@ -97,7 +98,7 @@ async function fetchQuota(
   }
 }
 
-export async function GET() {
+async function handleGET() {
   const state = getLlmState();
   let quota: Quota | null = null;
   // Quota UNIQUEMENT si le mode pack est configuré : le mode non configuré ne
@@ -199,7 +200,7 @@ function aiErrorResponse(e: unknown, fallback: string): NextResponse {
   return NextResponse.json({ error: fallback }, { status: 502 });
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body.action !== "string") {
     return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -284,3 +285,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: "Action inconnue." }, { status: 400 });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);
+export const POST = withUser(handlePOST);

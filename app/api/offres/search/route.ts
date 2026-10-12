@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CONTRACT_ORDER, type ContractCategory } from "@/lib/contracts";
 import { parseMinScore, searchOffres, type OffersSort } from "@/lib/db/offres";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+async function handleGET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const allowedContracts = new Set<string>(CONTRACT_ORDER);
   const contracts = (params.get("contracts") ?? "").split(",")
@@ -26,3 +27,6 @@ export async function GET(req: NextRequest) {
   });
   return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);

@@ -9,10 +9,11 @@ import { AiSettings } from "@/components/app/ai-settings";
 import { CleanupButton } from "@/components/app/cleanup-button";
 import { ProfileSwitcher } from "@/components/app/profile-switcher";
 import { ProfileEditor } from "./profile-editor";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+async function ProfilePageContent() {
   const profile = getProfile();
   if (!profile) redirect("/onboarding/upload");
   // 0 source cochée : le scan se replie sur les sources par défaut (orchestrateur).
@@ -58,4 +59,9 @@ export default async function ProfilePage() {
       </section>
     </>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function ProfilePage() {
+  return userScope(() => ProfilePageContent());
 }

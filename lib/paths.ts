@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { currentUserId } from "./session-context";
 
 /**
  * Résolution centralisée des emplacements de données utilisateur.
@@ -17,16 +18,35 @@ export function userDataDir(): string {
   return path.join(process.cwd(), "data");
 }
 
+/** Registre des comptes (noms d'utilisateur), commun à tous. */
+export function accountsFile(): string {
+  return path.join(userDataDir(), "accounts.json");
+}
+
+/** Dossier propre à un compte : sa base et ses documents. */
+export function accountDir(userId: string): string {
+  return path.join(userDataDir(), "users", userId);
+}
+
+/** Base de l'utilisateur connecté (lib/session-context.ts). */
 export function dbPath(): string {
+  return path.join(accountDir(currentUserId()), "jobscout.db");
+}
+
+/** Dossier de documents par défaut de l'utilisateur connecté (réglable dans Profil). */
+export function documentsDir(): string {
+  return path.join(accountDir(currentUserId()), "documents");
+}
+
+/**
+ * Base unique d'avant les comptes (3.4.x) : `data/jobscout.db`, ou
+ * JOBSCOUT_DB_PATH. Le premier compte créé en reçoit une copie
+ * (lib/accounts.ts) ; l'original reste en place, en sauvegarde.
+ */
+export function legacyDbPath(): string {
   const explicit = process.env.JOBSCOUT_DB_PATH?.trim();
   if (explicit) return path.resolve(explicit);
   return path.join(userDataDir(), "jobscout.db");
-}
-
-export function documentsDir(): string {
-  const explicit = process.env.JOBSCOUT_DOCS_PATH?.trim();
-  if (explicit) return path.resolve(explicit);
-  return path.join(userDataDir(), "documents");
 }
 
 /** Navigateurs Playwright (moteur LinkedIn) — téléchargés à la demande. */

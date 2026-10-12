@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { xlsxToCandidatures } from "@/lib/excel/io";
 import { createCandidature } from "@/lib/db/candidatures";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const fd = await req.formData();
   const file = fd.get("file");
   if (!(file instanceof File)) {
@@ -20,3 +21,6 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ ok: true, imported });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

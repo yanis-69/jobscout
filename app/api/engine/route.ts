@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withUser } from "@/lib/session";
 import {
   getEngineState,
   startEngineInstall,
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** État du moteur de navigation optionnel (Chromium, requis par LinkedIn). */
-export async function GET() {
+async function handleGET() {
   return NextResponse.json({
     ...getEngineState(),
     label: ENGINE_LABEL,
@@ -21,7 +22,11 @@ export async function GET() {
 }
 
 /** Démarre le téléchargement du moteur. Non bloquant : l'UI interroge GET. */
-export async function POST() {
+async function handlePOST() {
   const res = startEngineInstall();
   return NextResponse.json({ ...res, ...getEngineState() });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);
+export const POST = withUser(handlePOST);

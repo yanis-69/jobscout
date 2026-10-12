@@ -2,6 +2,7 @@ import { offresCounts, parseMinScore, searchOffres } from "@/lib/db/offres";
 import { PageHeader } from "@/components/app/page-header";
 import { OffresList } from "./list";
 import { ScanButton } from "./scan-button";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ function plural(count: number, word: string): string {
   return `${numberFormat.format(count)} ${word}${count > 1 ? "s" : ""}`;
 }
 
-export default async function OffresPage({ searchParams }: { searchParams: Promise<{ vie?: string; score?: string }> }) {
+async function OffresPageContent({ searchParams }: { searchParams: Promise<{ vie?: string; score?: string }> }) {
   const { vie, score } = await searchParams;
   const vieOnly = vie === "1";
   // ?score=70 (carte « Offres à 70 et plus » de l'accueil) active la puce de score à ce seuil.
@@ -37,4 +38,9 @@ export default async function OffresPage({ searchParams }: { searchParams: Promi
       <OffresList initialResult={initial} initialVieOnly={vieOnly} initialMinScore={minScore} />
     </>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function OffresPage(props: Parameters<typeof OffresPageContent>[0]) {
+  return userScope(() => OffresPageContent(props));
 }

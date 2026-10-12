@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { VersionBadge } from "./version-badge";
 import { QuotaBadge } from "./quota-badge";
+import { SignOutButton } from "./sign-out-button";
 
 const items = [
   { href: "/dashboard", label: "Accueil", icon: LayoutDashboard },
@@ -19,11 +20,14 @@ export function Sidebar({
   version,
   productName = "JobScout",
   profileName,
+  userName,
 }: {
   version: string;
   /** « JobScout Test » dans l'installeur de test — voir lib/update/check.ts. */
   productName?: string;
   profileName: string | null;
+  /** Utilisateur connecté (lib/accounts.ts). */
+  userName: string;
 }) {
   const pathname = usePathname();
   const isActive = (href: string) => pathname === href || pathname?.startsWith(href + "/");
@@ -41,6 +45,7 @@ export function Sidebar({
           <QuotaBadge compact />
           <VersionBadge version={version} productName={productName} compact />
           <ThemeToggle compact />
+          <SignOutButton userName={userName} compact />
         </div>
       </header>
 
@@ -76,6 +81,7 @@ export function Sidebar({
             <span className="brand-mark h-9 w-9 rounded-full text-small font-semibold text-accent">{initials}</span>
             <span className="min-w-0"><span className="block truncate text-small font-semibold">{profileName || "Votre profil"}</span><span className="block text-caption text-textSecondary">Profil actif</span></span>
           </Link>
+          <SignOutButton userName={userName} />
           <ThemeToggle />
           <QuotaBadge />
           <VersionBadge version={version} productName={productName} />

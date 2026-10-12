@@ -8,6 +8,7 @@ import { listDocuments } from "@/lib/db/documents";
 import { highScoreFigure, untrackedOffresCount, vieFigure } from "@/lib/db/dashboard";
 import { getProfile } from "@/lib/db/queries";
 import { formatRelativeDate, scoreColor } from "@/lib/utils";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ function plural(n: number, singular: string, pluralForm = `${singular}s`): strin
   return `${n.toLocaleString("fr-FR")} ${n > 1 ? pluralForm : singular}`;
 }
 
-export default async function DashboardPage() {
+async function DashboardPageContent() {
   const profile = getProfile();
   const untrackedOffers = suggestedOffres(6, true);
   const fallbackOffers = suggestedOffres(7);
@@ -272,4 +273,9 @@ function Metric({ icon: Icon, label, value, detail, href }: { icon: LucideIcon; 
       </span>
     </Link>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function DashboardPage() {
+  return userScope(() => DashboardPageContent());
 }

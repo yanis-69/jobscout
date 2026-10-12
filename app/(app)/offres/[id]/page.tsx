@@ -10,10 +10,11 @@ import { ActionsPanel } from "./actions";
 import { formatRelativeDate, scoreColor } from "@/lib/utils";
 import { CONTRACT_LABELS } from "@/lib/contracts";
 import { SOURCES_META } from "@/lib/sources-meta";
+import { userScope } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function OffreDetailPage({ params }: { params: Promise<{ id: string }> }) {
+async function OffreDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const offre = getOffre(Number(id));
   if (!offre) notFound();
@@ -118,4 +119,9 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
       <div className="h-1.5 overflow-hidden rounded-full bg-surfaceHover"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>
     </div>
   );
+}
+
+// Rendue en tant que l'utilisateur connecté (lib/session.ts), sinon redirection vers /login.
+export default async function OffreDetailPage(props: Parameters<typeof OffreDetailPageContent>[0]) {
+  return userScope(() => OffreDetailPageContent(props));
 }

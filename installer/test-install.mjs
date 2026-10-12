@@ -65,15 +65,37 @@ async function waitFor(fn, timeoutMs, everyMs = 500) {
   return false;
 }
 
-async function get(url) {
+/** Cookie de session de la recette (comptes, 3.5) : posé par signIn(). */
+let sessionCookie = null;
+
+async function get(url, cookie = sessionCookie) {
   try {
-    const res = await fetch(url, { redirect: "manual" });
+    const res = await fetch(url, { redirect: "manual", headers: cookie ? { cookie } : {} });
     const text = res.status < 400 ? await res.text() : "";
     return { status: res.status, location: res.headers.get("location"), text };
   } catch (e) {
     return { status: 0, location: null, text: "", error: e.message };
   }
 }
+
+/** Connexion par nom d'utilisateur (POST /api/auth/login) → « jobscout_user=<id> », ou null. */
+async function signIn(base, name) {
+  try {
+    const res = await fetch(base + "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const raw = (res.headers.getSetCookie?.() ?? []).find((c) => c.startsWith("jobscout_user="));
+    return res.ok && raw ? raw.split(";")[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Base du compte de recette (une base par utilisateur depuis la 3.5). */
+const RECETTE_USER = "recette";
+const userDb = (root) => path.join(root, "users", RECETTE_USER, "jobscout.db");
 
 /**
  * Compte les lignes des tables qui portent des données utilisateur — lecture
@@ -374,8 +396,6 @@ export async function run() {
       HOSTNAME: "127.0.0.1",
       PORT: String(TEST_PORT),
       JOBSCOUT_DATA_DIR: dataDir,
-      JOBSCOUT_DB_PATH: path.join(dataDir, "jobscout.db"),
-      JOBSCOUT_DOCS_PATH: path.join(dataDir, "documents"),
       PLAYWRIGHT_BROWSERS_PATH: path.join(dataDir, "browsers"),
       // Isolation du moteur LinkedIn : browser-engine.ts se rabat sur le
       // registre Playwright global (%LOCALAPPDATA%\ms-playwright) — et libuv
@@ -421,7 +441,19 @@ export async function run() {
       throw new Error("Serveur injoignable.\n" + serverLog.join("").slice(-3000));
     }
 
-    // ------------------------------------------ 4. onboarding bloquant
+    // ------------------------------------------ 4. connexion obligatoire
+    const anonymous = await get(base + "/");
+    check(
+      "« / » sans session redirige vers la connexion",
+      anonymous.status >= 300 && anonymous.status < 400 && (anonymous.location || "").includes("/login"),
+      `HTTP ${anonymous.status} → ${anonymous.location}`
+    );
+    const anonymousApi = await get(base + "/api/profile");
+    check("API sans session refusée (401)", anonymousApi.status === 401, `HTTP ${anonymousApi.status}`);
+    sessionCookie = await signIn(base, "Recette");
+    check("connexion par nom d'utilisateur (POST /api/auth/login)", !!sessionCookie, String(sessionCookie));
+
+    // ------------------------------------------ 4 bis. onboarding bloquant
     const root = await get(base + "/");
     check(
       "« / » sur base vierge redirige vers l'onboarding",
@@ -476,7 +508,7 @@ export async function run() {
     // ------------------------------------------ 5 bis. base VIERGE
     // « / » a déjà ouvert la base (gate d'onboarding) : elle existe, et elle
     // doit être vide — aucun profil, aucune offre, aucun document.
-    const blank = await countRows(path.join(dataDir, "jobscout.db"));
+    const blank = await countRows(userDb(dataDir));
     check(
       "base vierge à l'installation : 0 profil, 0 offre, 0 document",
       blank.ok && blank.empty,
@@ -535,16 +567,16 @@ export async function run() {
     };
     const post = await fetch(base + "/api/profile", {
       method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
+      headers: { "content-type": "application/json; charset=utf-8", cookie: sessionCookie ?? "" },
       body: JSON.stringify(profile),
     });
     check("création du profil (POST /api/profile)", post.ok, `HTTP ${post.status}`);
 
     // ------------------------------------------ 7. base créée hors de {app}
     check(
-      "base créée dans le répertoire de données",
-      fs.existsSync(path.join(dataDir, "jobscout.db")),
-      path.join(dataDir, "jobscout.db")
+      "base du compte créée dans le répertoire de données",
+      fs.existsSync(userDb(dataDir)),
+      userDb(dataDir)
     );
     check(
       "aucune base écrite dans le répertoire d'installation",
@@ -637,11 +669,16 @@ export async function run() {
         !!launcherUrl && launcherUrl.startsWith("http://127.0.0.1:"),
         launcherUrl || "url illisible"
       );
-      const r = await get(launcherUrl);
+      const r = await get(launcherUrl, null);
       check("launcher : l'application répond", r.status > 0, `HTTP ${r.status}`);
+      // Un compte de recette n'est créé que dans un dossier de données neuf
+      // (variant de test, ou aucun JobScout sur ce poste) : jamais à côté des
+      // comptes réels d'un JobScout standard déjà utilisé.
+      const launcherCookie = isTest || !preExisting ? await signIn(launcherUrl, "Recette") : null;
+      if (launcherCookie) await get(launcherUrl + "/", launcherCookie);
       check(
         `launcher : données sous %LOCALAPPDATA%\\${variant.dataDirName}`,
-        fs.existsSync(path.join(localData, "jobscout.db"))
+        launcherCookie ? fs.existsSync(userDb(localData)) : fs.existsSync(localData)
       );
       // Le launcher relit la sortie UTF-8 de node et écrit le journal en
       // UTF-8 : « ▲ Next.js » doit s'y lire tel quel, jamais « â–² Next.js ».
@@ -660,7 +697,7 @@ export async function run() {
         // le launcher sous « JobScout Test » est VIERGE. Lue pendant que le
         // serveur tourne (la base est ouverte proprement, en WAL) — après
         // l'arrêt, Windows peut encore retenir les handles quelques instants.
-        const launcherDb = await countRows(path.join(localData, "jobscout.db"));
+        const launcherDb = await countRows(userDb(localData));
         check(
           `launcher : base vierge sous %LOCALAPPDATA%\\${variant.dataDirName} (0 profil, 0 offre, 0 document)`,
           launcherDb.ok && launcherDb.empty,
@@ -712,7 +749,7 @@ export async function run() {
       check("désinstallation : répertoire d'installation nettoyé", gone);
       check(
         "désinstallation : données utilisateur PRÉSERVÉES",
-        fs.existsSync(path.join(dataDir, "jobscout.db"))
+        fs.existsSync(userDb(dataDir))
       );
     }
     try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch {}

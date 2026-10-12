@@ -4,11 +4,12 @@ import { getOffre } from "@/lib/db/offres";
 import { generateMsgVie } from "@/lib/ai/generate-msg-vie";
 import { genericFailure, translateAiError } from "@/lib/ai/errors";
 import { saveDocument, offreFolderPath } from "@/lib/db/documents";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   try {
     const { offreId } = await req.json();
     const profile = getProfile();
@@ -43,3 +44,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

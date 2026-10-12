@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProfile } from "@/lib/db/queries";
 import { listOffres, setOffreScore } from "@/lib/db/offres";
 import { scoreOffreLocal } from "@/lib/scoring/local";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -9,7 +10,7 @@ export const maxDuration = 120;
 // Re-score toutes les offres avec le profil actif.
 // Utile après une mise à jour du profil (secteurs, pays, compétences) ou du
 // moteur de scoring — le scoring est local et déterministe, donc gratuit.
-export async function POST() {
+async function handlePOST() {
   const profile = getProfile();
   if (!profile) {
     return NextResponse.json({ error: "Aucun profil actif" }, { status: 400 });
@@ -29,3 +30,6 @@ export async function POST() {
   }
   return NextResponse.json({ ok: true, rescored: updated });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const POST = withUser(handlePOST);

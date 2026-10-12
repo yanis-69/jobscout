@@ -4,6 +4,7 @@ import { getProfile, saveProfile } from "@/lib/db/queries";
 import { listOffres, setOffreScore } from "@/lib/db/offres";
 import { scoreOffreLocal } from "@/lib/scoring/local";
 import { ProfileFullSchema } from "@/lib/cv/types";
+import { withUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -21,7 +22,7 @@ function sanitizeName(raw: unknown): string | null {
   return name;
 }
 
-export async function GET() {
+async function handleGET() {
   const rows = getDb()
     .prepare("SELECT key, value FROM settings WHERE key LIKE ? ORDER BY key")
     .all(`${PREFIX}%`) as { key: string; value: string }[];
@@ -37,7 +38,7 @@ export async function GET() {
   return NextResponse.json({ snapshots, current_full_name: current?.full_name ?? null });
 }
 
-export async function POST(req: NextRequest) {
+async function handlePOST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const action = body.action;
   const name = sanitizeName(body.name);
@@ -94,3 +95,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: "Action inconnue" }, { status: 400 });
 }
+
+// Exécutées en tant que l'utilisateur connecté (lib/session.ts).
+export const GET = withUser(handleGET);
+export const POST = withUser(handlePOST);

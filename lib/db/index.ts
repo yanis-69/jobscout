@@ -4,14 +4,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { dbPath } from "@/lib/paths";
 
-const DB_PATH = dbPath();
+/** Une connexion par base, donc par utilisateur (lib/session-context.ts). */
+const connections = new Map<string, DatabaseSync>();
 
-let _db: DatabaseSync | null = null;
-
+/** Base de l'utilisateur connecté, créée et mise à niveau à la première ouverture. */
 export function getDb(): DatabaseSync {
-  if (_db) return _db;
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const db = new DatabaseSync(DB_PATH);
+  const file = dbPath();
+  const open = connections.get(file);
+  if (open) return open;
+  return openDb(file);
+}
+
+function openDb(file: string): DatabaseSync {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
 
@@ -30,7 +36,7 @@ export function getDb(): DatabaseSync {
     } catch {}
   }
 
-  _db = db;
+  connections.set(file, db);
   return db;
 }
 
